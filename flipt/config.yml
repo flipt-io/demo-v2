@@ -1,0 +1,61 @@
+analytics:
+  storage:
+    prometheus:
+      enabled: true
+      url: http://prometheus:9090
+      headers:
+        Authorization: ${env:PROMETHEUS_AUTH_TOKEN}
+
+authentication:
+  required: true
+  session:
+    domain: "localhost:8080"
+    secure: false
+    csrf:
+      key: "enabled"
+  methods:
+    token:
+      enabled: true
+      cleanup:
+        interval: 2h
+        grace_period: 48h
+    oidc:
+      enabled: true
+      providers:
+        gitea:
+          issuer_url: "http://gitea:3000/"
+          client_id: 1b49e255-c90c-400f-9e57-cf43238f9717
+          client_secret: gto_76jd2kuc3cuim5jxmk5egop2vfogofsu4a3xtkq3iq2vh7xtriwa
+          redirect_address: "http://localhost:8080"
+          scopes:
+            - email
+            - profile
+storage:
+  onoffinc:
+    remote: "http://gitea:3000/onoffinc/features.git"
+    branch: "main"
+    poll_interval: "30s"
+    credentials: "gitea"
+    backend:
+      type: memory
+    name: "onoffinc"
+
+environments:
+  onoffinc:
+    default: true
+    name: "onoffinc"
+    storage: "onoffinc"
+    scm:
+      type: gitea
+      api_url: http://gitea:3000/
+      credentials: "gitea"
+
+credentials:
+  gitea:
+    type: basic
+    basic:
+      username: admin
+      password: password
+
+tracing:
+  enabled: true

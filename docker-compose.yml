@@ -1,0 +1,89 @@
+services:
+  gitea:
+    container_name: gitea
+    build:
+      context: gitea
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    networks:
+      - flipt_network
+    environment:
+      ROOT_URL: http://gitea:3000/
+      DOMAIN: gitea
+      DISABLE_REGISTRATION: "true"
+      REQUIRE_SIGNIN_VIEW: "true"
+      INSTALL_LOCK: "true"
+      DB_TYPE: sqlite3
+      SSH_DOMAIN: localhost
+      HTTP_PORT: "3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    container_name: prometheus
+    networks:
+      - flipt_network
+    image: prom/prometheus:latest
+    volumes:
+      - "./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml"
+      - "./prometheus/web-config.yml:/etc/prometheus/web-config.yml"
+      - "./prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml"
+    ports:
+      - "9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.config.file=/etc/prometheus/web-config.yml
+    healthcheck:
+      test: ["CMD", "wget", "http://localhost:9090"]
+      interval: 10s
+      timeout: 15s
+      retries: 10
+      start_period: 40s
+
+  flipt:
+    image: ghcr.io/flipt-io/flipt:v2
+    container_name: flipt
+    volumes:
+      - "./flipt/config.yml:/etc/flipt/config/default.yml"
+    depends_on:
+      prometheus:
+        condition: service_started
+      gitea:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    networks:
+      - flipt_network
+    restart: always
+    environment:
+      - FLIPT_LOG_LEVEL=debug
+      - FLIPT_ANALYTICS_STORAGE_PROMETHEUS_ENABLED=true
+      - FLIPT_ANALYTICS_STORAGE_PROMETHEUS_URL=http://prometheus:9090
+      - PROMETHEUS_AUTH_TOKEN=Basic YWRtaW46cGFzc3dvcmQ=
+      - FLIPT_META_TELEMETRY_ENABLED=false
+      - FLIPT_META_CHECK_FOR_UPDATES=false
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      # - FLIPT_LICENSE_KEY=XXXXX-XXXXX-XXXXXX-XXXXXX-XXXXXXXX-XX
+
+    command: ["/flipt", "server"]
+
+  jaeger:
+    image: jaegertracing/jaeger:2.10.0
+    container_name: jaeger
+    deploy:
+      resources:
+        limits:
+          memory: 1200M
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+    networks:
+      - flipt_network
+
+networks:
+  flipt_network:

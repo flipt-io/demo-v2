@@ -1,0 +1,27 @@
+groups:
+  - name: flipt-alerts
+    rules:
+      - alert: Errors
+        expr: |
+          rate(flipt_server_errors_total{
+            otel_scope_name="go.flipt.io/flipt/v2"
+          }[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate"
+          description: "The service has high error rate."
+      - alert: LowEvaluationRatePerFlag
+        expr: |
+          sum by (flipt_flag) (
+            rate(flipt_evaluations_requests_total{
+              otel_scope_name="go.flipt.io/flipt/v2"
+            }[1m])
+          ) < 0.1
+        for: 2m
+        labels:
+          severity: info
+        annotations:
+          summary: "Low evaluation rate for flag {{ $labels.flipt_flag }}"
+          description: "The feature flag '{{ $labels.flipt_flag }}' is being evaluated less than 1 times per minute across all instances."
