@@ -10,7 +10,7 @@ createRoot(document.getElementById("root")!).render(
       options={{
         environment: "onoffinc",
         namespace: "default",
-        url: "http://localhost:8080",
+        url: "",
         updateInterval: 10, // Fetch flag updates every 10 seconds
         // Add other configuration options as needed
       }}
