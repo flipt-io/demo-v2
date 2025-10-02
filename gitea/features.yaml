@@ -15,13 +15,17 @@ flags:
       enabled: true
       variants:
         - key: city
-          attachment: {}
+          attachment:
+            - https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=1544
         - key: beach
-          attachment: {}
+          attachment:
+            - https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1544
         - key: mountain
-          attachment: {}
+          attachment:
+            - https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1544
         - key: snowboard
-          attachment: {}
+          attachment:
+            - https://images.unsplash.com/photo-1478700485868-972b69dc3fc4?q=80&w=1544
       rules:
         - segment:
             keys:

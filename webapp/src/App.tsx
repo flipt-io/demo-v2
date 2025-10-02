@@ -3,66 +3,39 @@ import {
   useFliptSelector,
 } from "@flipt-io/flipt-client-react";
 
-const themes = {
-  beach: {
-    image:
-      "url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1544')",
-    color: "bg-blue-400",
-  },
-  city: {
-    image:
-      "url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=1544')",
-    color: "bg-gray-800",
-  },
-  mountain: {
-    image:
-      "url('https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1544')",
-    color: "bg-green-700",
-  },
-  snowboard: {
-    image:
-      "url('https://images.unsplash.com/photo-1478700485868-972b69dc3fc4?q=80&w=1544')",
-    color: "bg-white",
-  },
-  default: {
-    image:
-      "url('https://images.unsplash.com/photo-1758132123976-6730692335f7?q=80&w=1544')",
-    color: "bg-white",
-  },
-  none: {
-    image: "",
-    color: "bg-gray-300",
-  },
-};
-
 function App() {
-  const sale = useFliptBoolean("sale", false, "user-123", {});
-  const themeKey = useFliptSelector((client, isLoading, error) => {
+  const entityId = "user-123";
+  const sale = useFliptBoolean("sale", false, entityId, {});
+  const fallbackImage =
+    "https://images.unsplash.com/photo-1758132123976-6730692335f7?q=80&w=1544";
+  const themeImage = useFliptSelector((client, isLoading, error) => {
     if (isLoading) {
-      return "none";
+      return "";
     }
     if (client && !isLoading && !error) {
       try {
-        return client.evaluateVariant({
-          flagKey: "theme",
-          entityId: "user-123",
-          context: {
-            month: (new Date().getMonth() + 1).toFixed(0),
-          },
-        }).variantKey;
+        return (
+          JSON.parse(
+            client.evaluateVariant({
+              flagKey: "theme",
+              entityId,
+              context: {
+                month: (new Date().getMonth() + 1).toFixed(0),
+              },
+            }).variantAttachment,
+          )[0] || fallbackImage
+        );
       } catch (e) {
         console.error("Error evaluating variant flag theme:", e);
       }
+      return fallbackImage;
     }
-    return "default";
   });
 
-  // @ts-ignore
-  const theme = themes[themeKey] || themes.default;
   return (
     <div
-      className={`h-full bg-cover bg-center ${theme.color}`}
-      style={{ backgroundImage: theme.image }}
+      className="h-full bg-cover bg-center bg-gray-300"
+      style={{ backgroundImage: "url(" + themeImage + ")" }}
     >
       {sale && (
         <div className="bg-yellow-300 text-black p-4 text-center font-bold">
