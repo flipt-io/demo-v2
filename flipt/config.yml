@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/flipt-io/flipt/v2/config/flipt.schema.json
 analytics:
   storage:
     prometheus:
@@ -8,17 +9,15 @@ analytics:
 
 authentication:
   required: true
+  exclude:
+    evaluation: true
+    ofrep: true
   session:
     domain: "localhost:8080"
     secure: false
     csrf:
       key: "enabled"
   methods:
-    token:
-      enabled: true
-      cleanup:
-        interval: 2h
-        grace_period: 48h
     oidc:
       enabled: true
       providers:
@@ -30,15 +29,13 @@ authentication:
           scopes:
             - email
             - profile
-storage:
-  onoffinc:
-    remote: "http://gitea:3000/onoffinc/features.git"
-    branch: "main"
-    poll_interval: "30s"
-    credentials: "gitea"
-    backend:
-      type: memory
-    name: "onoffinc"
+
+credentials:
+  gitea:
+    type: basic
+    basic:
+      username: admin
+      password: password
 
 environments:
   onoffinc:
@@ -48,14 +45,19 @@ environments:
     scm:
       type: gitea
       api_url: http://gitea:3000/
-      credentials: "gitea"
+      credentials: gitea
 
-credentials:
-  gitea:
-    type: basic
-    basic:
-      username: admin
-      password: password
+storage:
+  onoffinc:
+    remote: "http://gitea:3000/onoffinc/features.git"
+    branch: "main"
+    poll_interval: "30s"
+    credentials: gitea
+    backend:
+      type: memory
 
 tracing:
+  enabled: true
+
+cors:
   enabled: true

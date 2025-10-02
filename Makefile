@@ -9,7 +9,6 @@ build:
 .PHONY: start
 start:
 	$(DOCKER_COMPOSE_CMD) up --force-recreate --remove-orphans --detach
-	$(DOCKER_COMPOSE_CMD) exec --user git  -t gitea  bash -c 'gitea admin regenerate hooks'
 
 	@echo ""
 	@echo ""
@@ -19,6 +18,7 @@ start:
 	@echo "Go to http://localhost:3000 for the Gitea."
 	@echo "Go to http://localhost:16686 for the Jaeger UI."
 	@echo "Go to http://localhost:9090 for the Prometheus UI."
+	@echo "Go to http://localhost:4000 for the Webapp."
 
 
 .PHONY: stop

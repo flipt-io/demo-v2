@@ -38,7 +38,15 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --web.config.file=/etc/prometheus/web-config.yml
     healthcheck:
-      test: ["CMD", "wget", "http://localhost:9090"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "--user=admin",
+          "--password=password",
+          "http://localhost:9090",
+        ]
       interval: 10s
       timeout: 15s
       retries: 10
@@ -82,6 +90,16 @@ services:
     ports:
       - "16686:16686"
       - "4318:4318"
+    networks:
+      - flipt_network
+
+  webapp:
+    container_name: webapp
+    build:
+      context: webapp
+      dockerfile: Dockerfile
+    ports:
+      - "4000:80"
     networks:
       - flipt_network
 
