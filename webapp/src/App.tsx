@@ -3,12 +3,12 @@ import {
   useFliptSelector,
 } from "@flipt-io/flipt-client-react";
 
-function App() {
-  const entityId = "user-123";
-  const sale = useFliptBoolean("sale", false, entityId, {});
-  const fallbackImage =
-    "https://images.unsplash.com/photo-1758132123976-6730692335f7?q=80&w=1544";
-  const themeImage = useFliptSelector((client, isLoading, error) => {
+const entityId = "user-123";
+const fallbackImage =
+  "https://images.unsplash.com/photo-1758132123976-6730692335f7?q=80&w=1544";
+
+const loadTheme = (flagKey: string) => {
+  return function (client: any, isLoading: boolean, error: any) {
     if (isLoading) {
       return "";
     }
@@ -17,7 +17,7 @@ function App() {
         return (
           JSON.parse(
             client.evaluateVariant({
-              flagKey: "theme",
+              flagKey,
               entityId,
               context: {
                 month: (new Date().getMonth() + 1).toFixed(0),
@@ -30,33 +30,42 @@ function App() {
       }
       return fallbackImage;
     }
-  });
+  };
+};
+
+function App() {
+  const sale = useFliptBoolean("sale", false, entityId, {});
+  const themeImage = useFliptSelector(loadTheme("theme"));
 
   return (
-    <div
-      className="h-full bg-cover bg-center bg-gray-300"
-      style={{ backgroundImage: "url(" + themeImage + ")" }}
-    >
+    <>
       {sale && (
         <div className="bg-yellow-300 text-black p-4 text-center font-bold">
           Season Sale! Book your dream vacation now!
         </div>
       )}
-      <header className="flex justify-between items-center p-6 bg-white shadow text-gray-600">
-        <div className="text-2xl font-bold "> TravelCo </div>
-        <nav>
-          <a href="#" className="px-3 text-gray-600">
-            Contact
-          </a>
-        </nav>
-      </header>
-      <section className="m-auto h-3/5 w-2/5 flex flex-col justify-end items-center text-white text-center ">
-        <h1 className="text-4xl font-bold mb-4">Your Next Adventure Awaits</h1>
-        <button className="bg-white text-black px-6 py-3 font-semibold rounded shadow-xl">
-          Explore Now
-        </button>
-      </section>
-    </div>
+      <div
+        className="h-full bg-cover bg-center bg-gray-300"
+        style={{ backgroundImage: "url(" + themeImage + ")" }}
+      >
+        <header className="flex justify-between items-center p-6 bg-white shadow text-gray-600">
+          <div className="text-2xl font-bold "> TravelCo </div>
+          <nav>
+            <a href="#" className="px-3 text-gray-600">
+              Contact
+            </a>
+          </nav>
+        </header>
+        <section className="m-auto h-3/5 w-2/5 flex flex-col justify-end items-center text-white text-center ">
+          <h1 className="text-4xl font-bold mb-4">
+            Your Next Adventure Awaits
+          </h1>
+          <button className="bg-white text-black px-6 py-3 font-semibold rounded shadow-xl">
+            Explore Now
+          </button>
+        </section>
+      </div>
+    </>
   );
 }
 

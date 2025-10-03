@@ -1,3 +1,4 @@
 basic_auth_users:
   admin: $2a$12$rDnwkpvU.VoSP/LVyR/CE.T89qZTc4.L1kRvH3BgVwG1zY2zImgy2
   # password is `password`
+  #

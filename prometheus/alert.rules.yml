@@ -3,9 +3,7 @@ groups:
     rules:
       - alert: Errors
         expr: |
-          rate(flipt_server_errors_total{
-            otel_scope_name="go.flipt.io/flipt/v2"
-          }[5m]) > 0.05
+          rate(flipt_server_errors_total[5m]) > 0.05
         for: 2m
         labels:
           severity: warning
@@ -15,9 +13,7 @@ groups:
       - alert: LowEvaluationRatePerFlag
         expr: |
           sum by (flipt_flag) (
-            rate(flipt_evaluations_requests_total{
-              otel_scope_name="go.flipt.io/flipt/v2"
-            }[1m])
+            rate(flipt_evaluations_requests_total[1m])
           ) < 0.1
         for: 2m
         labels:

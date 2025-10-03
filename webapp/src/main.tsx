@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { FliptProvider } from "@flipt-io/flipt-client-react";
 import "./index.css";
 import App from "./App.tsx";
+import createHook from "./otel.tsx";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -13,6 +14,7 @@ createRoot(document.getElementById("root")!).render(
         url: "",
         updateInterval: 10, // Fetch flag updates every 10 seconds
         // Add other configuration options as needed
+        hook: createHook("onoffinc", "default"),
       }}
     >
       <App />

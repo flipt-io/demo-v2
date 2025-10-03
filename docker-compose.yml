@@ -35,6 +35,7 @@ services:
     ports:
       - "9090:9090"
     command:
+      - --web.enable-otlp-receiver
       - --config.file=/etc/prometheus/prometheus.yml
       - --web.config.file=/etc/prometheus/web-config.yml
     healthcheck:
@@ -53,7 +54,7 @@ services:
       start_period: 40s
 
   flipt:
-    image: ghcr.io/flipt-io/flipt:v2
+    image: docker.flipt.io/flipt/flipt:v2
     container_name: flipt
     volumes:
       - "./flipt/config.yml:/etc/flipt/config/default.yml"
@@ -68,7 +69,7 @@ services:
       - flipt_network
     restart: always
     environment:
-      - FLIPT_LOG_LEVEL=debug
+      - FLIPT_LOG_LEVEL=info
       - FLIPT_ANALYTICS_STORAGE_PROMETHEUS_ENABLED=true
       - FLIPT_ANALYTICS_STORAGE_PROMETHEUS_URL=http://prometheus:9090
       - PROMETHEUS_AUTH_TOKEN=Basic YWRtaW46cGFzc3dvcmQ=
@@ -89,7 +90,7 @@ services:
     restart: unless-stopped
     ports:
       - "16686:16686"
-      - "4318:4318"
+      - 4318
     networks:
       - flipt_network
 

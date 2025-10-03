@@ -58,6 +58,3 @@ storage:
 
 tracing:
   enabled: true
-
-cors:
-  enabled: true
