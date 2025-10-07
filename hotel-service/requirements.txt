@@ -10,4 +10,4 @@ opentelemetry-exporter-otlp==1.29.0
 opentelemetry-exporter-otlp-proto-http==1.29.0
 pydantic==2.10.6
 pydantic-settings==2.7.1
-requests==2.32.3
+requests==2.32.4
