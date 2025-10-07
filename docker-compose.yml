@@ -1,6 +1,7 @@
 services:
   gitea:
     container_name: gitea
+    hostname: gitea.docker.localhost
     build:
       context: gitea
       dockerfile: Dockerfile
@@ -9,8 +10,8 @@ services:
     networks:
       - flipt_network
     environment:
-      ROOT_URL: http://gitea:3000/
-      DOMAIN: gitea
+      ROOT_URL: http://gitea.docker.localhost:3000/
+      DOMAIN: gitea.docker.localhost
       DISABLE_REGISTRATION: "true"
       REQUIRE_SIGNIN_VIEW: "true"
       INSTALL_LOCK: "true"
@@ -32,6 +33,7 @@ services:
       - "./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml"
       - "./prometheus/web-config.yml:/etc/prometheus/web-config.yml"
       - "./prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml"
+      - "./prometheus/http.config.yml:/etc/prometheus/http.config.yml"
     ports:
       - "9090:9090"
     command:
@@ -42,16 +44,15 @@ services:
       test:
         [
           "CMD",
-          "wget",
-          "--spider",
-          "--user=admin",
-          "--password=password",
-          "http://localhost:9090",
+          "promtool",
+          "check",
+          "ready",
+          "--http.config.file=/etc/prometheus/http.config.yml",
         ]
       interval: 10s
       timeout: 15s
       retries: 10
-      start_period: 40s
+      start_period: 10s
 
   flipt:
     image: docker.flipt.io/flipt/flipt:v2
@@ -60,9 +61,9 @@ services:
       - "./flipt/config.yml:/etc/flipt/config/default.yml"
     depends_on:
       prometheus:
-        condition: service_started
+        condition: service_healthy
       gitea:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "8080:8080"
     networks:
@@ -79,6 +80,12 @@ services:
       # - FLIPT_LICENSE_KEY=XXXXX-XXXXX-XXXXXX-XXXXXX-XXXXXXXX-XX
 
     command: ["/flipt", "server"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 15s
+      retries: 10
+      start_period: 5s
 
   jaeger:
     image: jaegertracing/jaeger:2.10.0
@@ -118,7 +125,7 @@ services:
       - flipt_network
     depends_on:
       flipt:
-        condition: service_started
+        condition: service_healthy
       jaeger:
         condition: service_started
     environment:
@@ -126,7 +133,37 @@ services:
       - FLIPT_NAMESPACE=default
       - FLIPT_ENVIRONMENT=onoffinc
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://prometheus:9090/api/v1/otlp
+      - OTEL_EXPORTER_OTLP_METRICS_HEADERS=Authorization=Basic YWRtaW46cGFzc3dvcmQ=
       - OTEL_SERVICE_NAME=hotel-service
+
+  admin-service:
+    container_name: admin-service
+    hostname: admin.docker.localhost
+    build:
+      context: admin-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    networks:
+      - flipt_network
+    depends_on:
+      flipt:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+      hotel-service:
+        condition: service_started
+    environment:
+      - FLIPT_URL=http://flipt:8080
+      - FLIPT_NAMESPACE=default
+      - FLIPT_ENVIRONMENT=onoffinc
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://prometheus:9090/api/v1/otlp/v1/metrics
+      - OTEL_EXPORTER_OTLP_METRICS_HEADERS=Authorization=Basic YWRtaW46cGFzc3dvcmQ=
+      - OTEL_SERVICE_NAME=admin-service
+      - PORT=8001
+      - HOTEL_SERVICE_URL=http://hotel-service:8000
 
 networks:
   flipt_network:

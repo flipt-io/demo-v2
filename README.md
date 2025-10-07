@@ -2,6 +2,10 @@
 
 A comprehensive demonstration of Flipt v2 feature management platform showcasing a travel booking application with both frontend (React) and backend (Python) services using feature flags.
 
+> **⚠️ Demo Project Disclaimer**
+>
+> This is a demonstration project designed to showcase Flipt's feature flag capabilities and integration patterns. It is **not intended for production use** and does not follow all production best practices (e.g., authentication, data persistence, error handling, security measures, etc.). The goal is to demonstrate various ways to integrate and use Flipt across different programming languages and architectures.
+
 ## Overview
 
 This demo represents **TravelCo**, a fictional travel company's booking platform that uses Flipt feature flags to control various aspects of the user experience and backend functionality.
@@ -25,34 +29,34 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
               │                      │
     ┌─────────▼────────┐   ┌─────────▼────────┐
     │   Hotel Service  │   │   Flipt v2       │
-    │  Python/FastAPI  │──►│  (Port 8080)     │
-    │   (Port 8000)    │   │                  │
-    └─────────┬────────┘   └──┬────┬──────┬───┘
-              │               │    │      │
-              │               │    │      │
-              │               │    │      └───────┐
-              │               │    │              │
-              │               │    │    ┌─────────▼─────┐
-              │               │    │    │    Gitea      │
-              │               │    │    │  (Port 3000)  │
-              │               │    │    │Feature Flags  │
-              │               │    │    └───────────────┘
-              │               │    │
-              │               │    └────┐
-              │               │         │
-              │               │    ┌────▼──────────┐
-              │               │    │  Prometheus   │
-              │               │    │  (Port 9090)  │
-              │               │    │   Metrics &   │
-              │               │    │   Analytics   │
-              │               │    └───────────────┘
-              │               │
-              │          ┌────▼──────────┐
-              │          │    Jaeger     │
-              └──────────►  (Port 16686) │
-                         │  Distributed  │
-                         │    Tracing    │
-                         └───────────────┘
+    │  Python/FastAPI  │──►│  (Port 8080)     │◄────┐
+    │   (Port 8000)    │   │                  │     │
+    └─────────┬────────┘   └──┬────┬──────┬───┘     │
+              │               │    │      │         │
+              │               │    │      │         │
+    ┌─────────▼────────┐      │    │      └───────┐ │
+    │  Admin Service   │      │    │              │ │
+    │    Go/HTTP       │──────┘    │    ┌─────────▼─┴───┐
+    │   (Port 8001)    │           │    │    Gitea      │
+    └─────────┬────────┘           │    │  (Port 3000)  │
+              │                    │    │Feature Flags  │
+              │                    │    └───────────────┘
+              │                    │
+              │                    └────┐
+              │                         │
+              │                    ┌────▼──────────┐
+              │                    │  Prometheus   │
+              │                    │  (Port 9090)  │
+              │                    │   Metrics &   │
+              │                    │   Analytics   │
+              │                    └───────────────┘
+              │
+              │                ┌────────────┐
+              └────────────────►   Jaeger   │
+                               │(Port 16686)│
+                               │Distributed │
+                               │  Tracing   │
+                               └────────────┘
 ```
 
 ## Services
@@ -76,6 +80,7 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
 - **Port**: 8000
 - **Technology**: Python 3.12, FastAPI, Uvicorn
 - **Flipt Client**: `flipt` (Python SDK)
+- **API Documentation**: OpenAPI/Swagger UI at root endpoint (`/`)
 - **Feature Flags**:
   - `price-display-strategy` (variant): Control price presentation
     - `per-night`: Show price per night
@@ -88,7 +93,26 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
   - `similar-hotels` (boolean): Show hotel recommendations
 - **Telemetry**: Full OpenTelemetry integration (traces + metrics)
 
-### 3. Flipt (Feature Management)
+### 3. Admin Service (Go + Standard HTTP)
+
+- **Port**: 8001
+- **Technology**: Go 1.25, Standard HTTP library
+- **Flipt Client**: `flipt-client-go` with streaming support
+- **API Documentation**: OpenAPI/Swagger UI at root endpoint (`/`)
+- **Feature Flags**:
+  - `auto-approval` (boolean): Automatically approve low-risk bookings
+  - `approval-tier` (variant): Multi-level approval workflows
+    - `standard`: Standard approval process
+    - `premium`: Premium approval for higher-value bookings
+    - `vip`: VIP approval for luxury bookings
+- **Features**:
+  - View all bookings (pending, confirmed, rejected)
+  - Approve/reject bookings with feature flag evaluation
+  - Real-time flag updates via streaming (5-second polling)
+  - Intelligent approval routing based on booking value and hotel category
+- **Telemetry**: Full OpenTelemetry integration (traces + metrics)
+
+### 4. Flipt (Feature Management)
 
 - **Port**: 8080
 - **Version**: v2
@@ -99,20 +123,20 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
   - Environment: `onoffinc`
   - Namespace: `default`
 
-### 4. Gitea (Git Server)
+### 5. Gitea (Git Server)
 
 - **Port**: 3000
 - **Purpose**: Git-based storage for feature flags
 - **Credentials**: `admin:password`
 - **Repository**: `onoffinc/features`
 
-### 5. Jaeger (Distributed Tracing)
+### 6. Jaeger (Distributed Tracing)
 
 - **Port**: 16686
 - **Purpose**: Collect and visualize traces from all services
 - **Protocol**: OTLP over HTTP
 
-### 6. Prometheus (Metrics & Analytics)
+### 7. Prometheus (Metrics & Analytics)
 
 - **Port**: 9090
 - **Purpose**: Store metrics and analytics data
@@ -156,8 +180,8 @@ docker compose down -v
 Once started, you can access:
 
 - **Webapp**: <http://localhost:4000> - TravelCo booking site
-- **Hotel API**: <http://localhost:8000> - Hotel service REST API
-- **Hotel API Docs**: <http://localhost:8000/docs> - Interactive API documentation
+- **Hotel API**: <http://localhost:8000> - Hotel service REST API with interactive Swagger UI documentation
+- **Admin Service**: <http://localhost:8001> - Admin booking management API with interactive Swagger UI documentation
 - **Flipt UI**: <http://localhost:8080> - Feature flag management
 - **Gitea**: <http://localhost:3000> - Git repository for flags
 - **Jaeger**: <http://localhost:16686> - Distributed tracing
@@ -206,6 +230,25 @@ Once started, you can access:
 3. Enable flag for specific user segments
 4. Search again - premium hotels show 10% discount
 
+### Scenario 6: Admin Booking Approval Workflow
+
+1. Open Admin Service at <http://localhost:8001/api/bookings>
+2. View pending bookings from the hotel service
+3. Go to Flipt UI and enable `auto-approval` flag with constraints
+4. Set approval rules based on booking value (e.g., auto-approve under $500)
+5. Approve a booking via `POST /api/bookings/{id}/approve`
+6. See approval tier assigned (standard/premium/vip) based on booking value
+7. View traces in Jaeger showing flag evaluation and approval flow
+
+### Scenario 7: Multi-tier Approval Strategy
+
+1. In Flipt UI, configure `approval-tier` variant rules
+2. Set segments: high-value bookings (>$1000) → VIP tier
+3. Set segments: premium hotels → Premium tier  
+4. Default bookings → Standard tier
+5. Test different bookings to see tier assignment
+6. Monitor in Prometheus: `admin_booking_approvals_total` by tier
+
 ## Feature Flags Configuration
 
 All feature flags are defined in `gitea/features.yaml`:
@@ -217,17 +260,22 @@ All feature flags are defined in `gitea/features.yaml`:
 - `loyalty-program`: Loyalty member discounts
 - `instant-booking`: Instant confirmation flow
 - `similar-hotels`: Hotel recommendations
+- `auto-approval`: Automatic booking approval for low-risk bookings
 
 ### Variant Flags
 
 - `theme`: Seasonal hero backgrounds (city, beach, mountain, snowboard)
 - `price-display-strategy`: Price presentation (per-night, total, with-fees, dynamic)
+- `approval-tier`: Multi-level approval (standard, premium, vip)
 
 ### Segments
 
 - `winter`, `spring`, `summer`, `fall`: Seasonal segments based on month
 - `premium-users`: Premium tier users
 - `budget-users`: Budget-conscious users
+- `trusted-bookings`: Low-risk bookings (≤$500)
+- `high-value-bookings`: High-value bookings (≥$1000) 
+- `premium-hotels`: Premium/luxury hotel bookings
 
 ## Observability
 
@@ -242,6 +290,10 @@ hotel_availability_checks_total
 hotel_bookings_total
 feature_flag_evaluations_total
 price_display_strategy_usage_bucket
+
+# Admin service metrics
+admin_booking_approvals_total
+admin_booking_views_total
 
 # Flipt metrics
 flipt_evaluations_requests_total
@@ -287,16 +339,19 @@ Visit <http://localhost:8080>:
 
 This demo showcases:
 
-1. **Multi-language Support**: React (frontend) and Python (backend) both using Flipt
+1. **Multi-language Support**: React (frontend), Python (backend), and Go (admin service) all using Flipt
 2. **Multiple Flag Types**: Boolean and variant flags with different use cases
-3. **Segmentation**: Context-based targeting (seasonal, user tier)
+3. **Segmentation**: Context-based targeting (seasonal, user tier, booking value)
 4. **Git-based Storage**: Feature flags as code with version control
 5. **Full Observability**: Traces, metrics, and analytics integration
-6. **Real-world Use Cases**:
+6. **Streaming Updates**: Go client with real-time flag synchronization (5-second polling)
+7. **Real-world Use Cases**:
    - A/B testing (price strategies)
    - Progressive rollouts (instant booking)
    - Seasonal targeting (themes)
    - Premium features (loyalty program)
+   - Intelligent approval routing (admin service)
+   - Multi-tier workflows (approval tiers)
 
 ## License
 

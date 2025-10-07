@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     
     # OpenTelemetry settings
     otel_exporter_otlp_endpoint: str = "http://jaeger:4318"
-    otel_exporter_metric_endpoint: str = "http://prometheus:9090"
+    otel_exporter_otlp_metrics_endpoint: str = "http://prometheus:9090/api/v1/otlp"
+    otel_exporter_otlp_metrics_headers: str = ""
     otel_service_name: str = "hotel-service"
     
     # CORS settings

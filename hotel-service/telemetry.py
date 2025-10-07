@@ -36,8 +36,17 @@ def setup_telemetry(app):
     trace.set_tracer_provider(trace_provider)
     
     # Setup metrics
+    metric_headers = {}
+    if settings.otel_exporter_otlp_metrics_headers:
+        # Parse headers like "Authorization=Basic YWRt..."
+        for header in settings.otel_exporter_otlp_metrics_headers.split(","):
+            if "=" in header:
+                key, value = header.split("=", 1)
+                metric_headers[key.strip()] = value.strip()
+    
     metric_exporter = OTLPMetricExporter(
-        endpoint=f"{settings.otel_exporter_otlp_endpoint}/v1/metrics"
+        endpoint=f"{settings.otel_exporter_otlp_metrics_endpoint}/v1/metrics",
+        headers=metric_headers if metric_headers else None,
     )
     metric_reader = PeriodicExportingMetricReader(
         metric_exporter,
