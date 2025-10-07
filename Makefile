@@ -19,6 +19,7 @@ start:
 	@echo "Go to http://localhost:16686 for the Jaeger UI."
 	@echo "Go to http://localhost:9090 for the Prometheus UI."
 	@echo "Go to http://localhost:4000 for the Webapp."
+	@echo "Go to http://localhost:8000 for the Hotel Service API."
 
 
 .PHONY: stop

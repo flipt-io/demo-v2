@@ -103,6 +103,30 @@ services:
       - "4000:80"
     networks:
       - flipt_network
+    depends_on:
+      hotel-service:
+        condition: service_started
+
+  hotel-service:
+    container_name: hotel-service
+    build:
+      context: hotel-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    networks:
+      - flipt_network
+    depends_on:
+      flipt:
+        condition: service_started
+      jaeger:
+        condition: service_started
+    environment:
+      - FLIPT_URL=http://flipt:8080
+      - FLIPT_NAMESPACE=default
+      - FLIPT_ENVIRONMENT=onoffinc
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_SERVICE_NAME=hotel-service
 
 networks:
   flipt_network:
