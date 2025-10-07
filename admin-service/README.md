@@ -1,0 +1,221 @@
+# Admin Service
+
+A Go-based admin service for managing hotel bookings with Flipt feature flags integration.
+
+## Features
+
+- **Booking Management**: View, approve, and reject hotel bookings
+- **Flipt Integration**: Uses `flipt-client-go` with streaming support for real-time flag updates
+- **Feature Flags**:
+  - `auto-approval`: Boolean flag for automatic booking approval
+  - `approval-tier`: Variant flag for multi-level approval workflows (standard, premium, vip)
+- **OpenTelemetry**: Full observability with distributed tracing and metrics
+- **RESTful API**: Simple HTTP API for booking operations
+
+## API Endpoints
+
+### Booking Operations
+
+#### Get All Bookings
+
+```bash
+GET /api/bookings?status=pending
+```
+
+Returns all bookings, optionally filtered by status (`pending`, `confirmed`, `rejected`).
+
+#### Get Booking Details
+
+```sh
+GET /api/bookings/{id}
+```
+
+Returns details for a specific booking.
+
+#### Create Booking
+
+```sh
+POST /api/bookings
+Content-Type: application/json
+
+{
+  "hotel_id": "hotel-1",
+  "guest_name": "John Doe",
+  "guest_email": "john.doe@example.com",
+  "checkin": "2024-12-20",
+  "checkout": "2024-12-23",
+  "guests": 2,
+  "total_price": 450.00
+}
+```
+
+Creates a new booking with status `pending`.
+
+#### Approve Booking
+
+```sh
+POST /api/bookings/{id}/approve
+```
+
+Approves a pending booking. The service evaluates Flipt feature flags to determine:
+
+- Whether to auto-approve based on the `auto-approval` flag
+- The approval tier (standard/premium/vip) based on the `approval-tier` flag
+
+Response includes the booking details, auto-approval status, and approval tier.
+
+#### Reject Booking
+
+```sh
+POST /api/bookings/{id}/reject
+Content-Type: application/json
+
+{
+  "reason": "Insufficient availability"
+}
+```
+
+Rejects a pending booking with a reason.
+
+### Feature Flag Status
+
+#### Get Flag Status
+
+```sh
+GET /api/flags?entity_id=admin
+```
+
+Returns current status of feature flags for the given entity.
+
+### Health Check
+
+```sh
+GET /health
+```
+
+Returns service health status.
+
+## Configuration
+
+Environment variables:
+
+- `FLIPT_URL`: Flipt server URL (default: `http://flipt:8080`)
+- `FLIPT_NAMESPACE`: Flipt namespace (default: `default`)
+- `FLIPT_ENVIRONMENT`: Flipt environment (default: `onoffinc`)
+- `PORT`: Service port (default: `8001`)
+
+## Example Usage
+
+```bash
+# List pending bookings
+curl http://localhost:8001/api/bookings?status=pending
+
+# View specific booking
+curl http://localhost:8001/api/bookings/BK-001
+
+# Approve a booking
+curl -X POST http://localhost:8001/api/bookings/BK-001/approve
+
+# Reject a booking
+curl -X POST http://localhost:8001/api/bookings/BK-002/reject \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Payment declined"}'
+
+# Check feature flag status
+curl http://localhost:8001/api/flags
+```
+
+## Observability
+
+### Metrics
+
+The service exports the following metrics to Prometheus:
+
+- `admin_booking_approvals_total`: Counter for booking approvals
+- `admin_booking_views_total`: Counter for booking views
+
+### Traces
+
+All operations are traced using OpenTelemetry and sent to Jaeger. View traces at:
+
+- Jaeger UI: <http://localhost:16686>
+- Select service: `admin-service`
+
+Trace spans include:
+
+- Flag evaluations with context
+- Booking operations
+- Auto-approval decisions
+- Approval tier assignments
+
+## Feature Flag Configuration
+
+Add these flags to your Flipt configuration:
+
+### Boolean Flag: `auto-approval`
+
+Controls automatic approval of bookings based on criteria.
+
+```yaml
+flags:
+  - key: auto-approval
+    name: Auto Approval
+    description: Automatically approve bookings that meet criteria
+    type: BOOLEAN_FLAG_TYPE
+    enabled: true
+```
+
+### Variant Flag: `approval-tier`
+
+Determines the approval tier for bookings.
+
+```yaml
+flags:
+  - key: approval-tier
+    name: Approval Tier
+    description: Multi-level approval workflow
+    type: VARIANT_FLAG_TYPE
+    enabled: true
+    variants:
+      - key: standard
+        name: Standard Approval
+      - key: premium
+        name: Premium Approval
+      - key: vip
+        name: VIP Approval
+```
+
+## Architecture
+
+```
+┌─────────────────┐
+│  Admin Service  │
+│   (Go/HTTP)     │
+│   Port: 8001    │
+└────────┬────────┘
+         │
+         ├──────► Flipt (Streaming)
+         │        - auto-approval flag
+         │        - approval-tier flag
+         │
+         ├──────► Jaeger (Traces)
+         │
+         └──────► Prometheus (Metrics)
+```
+
+## Development
+
+```bash
+# Format code
+go fmt ./...
+
+# Run tests
+go test ./...
+
+# Build
+go build -o admin-service .
+```
+
+## License
+
+MIT

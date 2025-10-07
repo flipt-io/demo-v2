@@ -1,7 +1,7 @@
 import logging
 import random
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,6 +39,8 @@ app = FastAPI(
     title="Hotel Service API",
     description="Hotel availability and booking service with Flipt feature flags",
     version=settings.service_version,
+    docs_url="/",
+    redoc_url=None,
 )
 
 # Setup CORS
@@ -84,15 +86,11 @@ price_strategy_histogram = meter.create_histogram(
     unit="1",
 )
 
+# In-memory bookings storage
+bookings_storage: Dict[str, dict] = {}
 
-@app.get("/")
-async def root():
-    """Root endpoint."""
-    return {
-        "service": settings.service_name,
-        "version": settings.service_version,
-        "status": "healthy",
-    }
+
+
 
 
 @app.get("/health")
@@ -318,6 +316,23 @@ async def book_hotel(
             f"status={status}, instant={instant_booking}"
         )
         
+        # Store booking in memory
+        booking_data = {
+            "booking_id": booking_id,
+            "hotel_id": hotel_id,
+            "status": status,
+            "confirmation_number": confirmation,
+            "total_price": price_info["display_price"],
+            "guest_name": booking.guest_name,
+            "guest_email": booking.guest_email,
+            "checkin": booking.checkin,
+            "checkout": booking.checkout,
+            "guests": booking.guests,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow(),
+        }
+        bookings_storage[booking_id] = booking_data
+        
         return BookingResponse(
             booking_id=booking_id,
             hotel_id=hotel_id,
@@ -392,6 +407,46 @@ async def get_popular_hotels(
         return {
             "hotels": hotels[:5],  # Top 5
             "total_count": len(hotels),
+        }
+
+
+@app.get("/api/bookings")
+async def get_bookings(
+    status: Optional[str] = Query(None, description="Filter by status (pending, confirmed, rejected)"),
+):
+    """
+    Get all bookings, optionally filtered by status.
+    Used by admin-service to retrieve unapproved bookings.
+    """
+    with tracer.start_as_current_span("get_bookings") as span:
+        span.set_attribute("status", status or "all")
+        
+        # Filter by status if provided
+        if status:
+            filtered_bookings = [
+                b for b in bookings_storage.values() 
+                if b["status"] == status
+            ]
+        else:
+            filtered_bookings = list(bookings_storage.values())
+        
+        # Create a copy and convert datetime to ISO string for JSON serialization
+        serializable_bookings = []
+        for booking in filtered_bookings:
+            booking_copy = booking.copy()
+            # Convert datetime objects to ISO strings if they aren't already
+            if hasattr(booking_copy["created_at"], "isoformat"):
+                booking_copy["created_at"] = booking_copy["created_at"].isoformat()
+            if hasattr(booking_copy["updated_at"], "isoformat"):
+                booking_copy["updated_at"] = booking_copy["updated_at"].isoformat()
+            serializable_bookings.append(booking_copy)
+        
+        logger.info(f"Retrieved {len(serializable_bookings)} bookings with status={status}")
+        
+        return {
+            "bookings": serializable_bookings,
+            "total": len(serializable_bookings),
+            "status": status or "all",
         }
 
 

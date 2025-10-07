@@ -22,7 +22,7 @@ authentication:
       enabled: true
       providers:
         gitea:
-          issuer_url: "http://gitea:3000/"
+          issuer_url: "http://gitea.docker.localhost:3000/"
           client_id: 1b49e255-c90c-400f-9e57-cf43238f9717
           client_secret: gto_76jd2kuc3cuim5jxmk5egop2vfogofsu4a3xtkq3iq2vh7xtriwa
           redirect_address: "http://localhost:8080"
