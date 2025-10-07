@@ -14,6 +14,7 @@ createRoot(document.getElementById("root")!).render(
         url: "",
         updateInterval: 10, // Fetch flag updates every 10 seconds
         // Add other configuration options as needed
+        // @ts-ignore
         hook: createHook("onoffinc", "default"),
       }}
     >
