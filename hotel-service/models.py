@@ -63,3 +63,9 @@ class BookingResponse(BaseModel):
     confirmation_number: Optional[str] = None
     total_price: float
     created_at: datetime
+
+
+class BookingUpdateRequest(BaseModel):
+    """Booking update request for PATCH endpoint."""
+    status: Optional[str] = Field(None, description="Booking status (pending, confirmed, rejected)")
+    confirmation_number: Optional[str] = Field(None, description="Confirmation number")

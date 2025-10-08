@@ -135,15 +135,6 @@ class FliptService:
             context=context,
             default=False
         )
-    
-    def is_similar_hotels_enabled(self, entity_id: str, context: dict = None) -> bool:
-        """Check if similar hotels feature is enabled."""
-        return self.evaluate_boolean(
-            flag_key="similar-hotels",
-            entity_id=entity_id,
-            context=context,
-            default=False
-        )
 
 
 # Global Flipt service instance

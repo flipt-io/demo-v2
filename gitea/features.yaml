@@ -6,12 +6,12 @@ flags:
     - key: sale
       name: Sale
       type: BOOLEAN_FLAG_TYPE
-      description: "#webapp Highlight the banner promoting the seasonal sale"
+      description: '#webapp Highlight the banner promoting the seasonal sale'
       enabled: false
     - key: theme
       name: Theme
       type: VARIANT_FLAG_TYPE
-      description: "#webapp The hero background to the landing page"
+      description: '#webapp The hero background to the landing page'
       enabled: true
       variants:
         - key: city
@@ -58,35 +58,31 @@ flags:
     - key: real-time-availability
       name: Real-Time Availability
       type: BOOLEAN_FLAG_TYPE
-      description: "#hotel-service Enable real-time room availability updates in hotel search"
+      description: '#hotel-service Enable real-time room availability updates in hotel search'
       enabled: true
     - key: loyalty-program
       name: Loyalty Program
       type: BOOLEAN_FLAG_TYPE
-      description: "#hotel-service Display loyalty program benefits and discounts (10% off for premium hotels)"
+      description: '#hotel-service Display loyalty program benefits and discounts (10% off for premium hotels)'
       enabled: false
     - key: instant-booking
       name: Instant Booking
       type: BOOLEAN_FLAG_TYPE
-      description: "#hotel-service Enable instant booking confirmation vs pending approval"
+      description: '#hotel-service Enable instant booking confirmation vs pending approval'
       enabled: false
-    - key: similar-hotels
-      name: Similar Hotels
-      type: BOOLEAN_FLAG_TYPE
-      description: "#hotel-service Show similar hotel recommendations"
-      enabled: true
     - key: auto-approval
       name: Auto Approval
       type: BOOLEAN_FLAG_TYPE
-      description: "#admin-service Automatically approve bookings that meet criteria (low price, trusted users)"
+      description: '#admin-service Automatically approve bookings that meet criteria (low price, trusted users)'
       enabled: false
     - key: approval-tier
       name: Approval Tier
       type: VARIANT_FLAG_TYPE
-      description: "#admin-service Multi-level approval workflow based on booking value and hotel category"
+      description: '#admin-service Multi-level approval workflow based on booking value and hotel category'
       enabled: true
       variants:
-        - key: standard
+        - default: true
+          key: standard
           name: Standard Approval
         - key: premium
           name: Premium Approval
@@ -110,7 +106,7 @@ flags:
     - key: price-display-strategy
       name: Price Display Strategy
       type: VARIANT_FLAG_TYPE
-      description: "#hotel-service Control how hotel prices are displayed to users for A/B testing"
+      description: '#hotel-service Control how hotel prices are displayed to users for A/B testing'
       enabled: true
       variants:
         - key: per-night
@@ -139,7 +135,7 @@ flags:
 segments:
     - key: winter
       name: Winter Season
-      description: "#webapp Targets users during winter months (January-March) for snowboard-themed content"
+      description: '#webapp Targets users during winter months (January-March) for snowboard-themed content'
       constraints:
         - type: NUMBER_COMPARISON_TYPE
           property: month
@@ -152,7 +148,7 @@ segments:
       match_type: ALL_MATCH_TYPE
     - key: spring
       name: Spring Season
-      description: "#webapp Targets users during spring months (April-May) for city-themed content"
+      description: '#webapp Targets users during spring months (April-May) for city-themed content'
       constraints:
         - type: NUMBER_COMPARISON_TYPE
           property: month
@@ -165,7 +161,7 @@ segments:
       match_type: ANY_MATCH_TYPE
     - key: summer
       name: Summer Season
-      description: "#webapp Targets users during summer months (June-September) for beach-themed content"
+      description: '#webapp Targets users during summer months (June-September) for beach-themed content'
       constraints:
         - type: NUMBER_COMPARISON_TYPE
           property: month
@@ -178,7 +174,7 @@ segments:
       match_type: ALL_MATCH_TYPE
     - key: fall
       name: Fall Season
-      description: "#webapp Targets users during fall months (October) for mountain-themed content"
+      description: '#webapp Targets users during fall months (October) for mountain-themed content'
       constraints:
         - type: NUMBER_COMPARISON_TYPE
           property: month
@@ -187,25 +183,25 @@ segments:
       match_type: ALL_MATCH_TYPE
     - key: premium-users
       name: Premium Users
-      description: "#hotel-service Users with premium tier status who prefer dynamic pricing with potential savings"
+      description: '#hotel-service Users with premium tier status who prefer dynamic pricing with potential savings'
       constraints:
         - type: STRING_COMPARISON_TYPE
           property: user_tier
           operator: eq
-          value: "premium"
+          value: premium
       match_type: ALL_MATCH_TYPE
     - key: budget-users
       name: Budget Users
-      description: "#hotel-service Users looking for budget options who prefer transparent pricing with all fees shown"
+      description: '#hotel-service Users looking for budget options who prefer transparent pricing with all fees shown'
       constraints:
         - type: STRING_COMPARISON_TYPE
           property: user_tier
           operator: eq
-          value: "budget"
+          value: budget
       match_type: ALL_MATCH_TYPE
     - key: trusted-bookings
       name: Trusted Bookings
-      description: "#admin-service Low-risk bookings from trusted users with low prices"
+      description: '#admin-service Low-risk bookings from trusted users with low prices'
       constraints:
         - type: NUMBER_COMPARISON_TYPE
           property: total_price
@@ -214,7 +210,7 @@ segments:
       match_type: ALL_MATCH_TYPE
     - key: high-value-bookings
       name: High Value Bookings
-      description: "#admin-service High-value bookings requiring VIP approval"
+      description: '#admin-service High-value bookings requiring VIP approval'
       constraints:
         - type: NUMBER_COMPARISON_TYPE
           property: total_price
@@ -223,14 +219,14 @@ segments:
       match_type: ALL_MATCH_TYPE
     - key: premium-hotels
       name: Premium Hotels
-      description: "#admin-service Premium or luxury hotel bookings requiring premium approval"
+      description: '#admin-service Premium or luxury hotel bookings requiring premium approval'
       constraints:
         - type: STRING_COMPARISON_TYPE
           property: hotel_category
           operator: eq
-          value: "premium"
+          value: premium
         - type: STRING_COMPARISON_TYPE
           property: hotel_category
           operator: eq
-          value: "luxury"
+          value: luxury
       match_type: ANY_MATCH_TYPE

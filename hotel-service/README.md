@@ -6,8 +6,8 @@ A Python FastAPI-based hotel availability and booking service that demonstrates 
 
 - **Hotel Search**: Search hotels by location with feature-flag controlled pricing strategies
 - **Availability Checking**: Real-time availability checks (feature flag controlled)
-- **Booking**: Hotel booking with instant confirmation (feature flag controlled)
-- **Similar Hotels**: Recommendation engine (feature flag controlled)
+- **Booking Management**: Create, view, and update hotel bookings
+- **Instant Booking**: Immediate confirmation vs pending approval (feature flag controlled)
 - **OpenTelemetry**: Full observability with traces and metrics exported to Jaeger and Prometheus
 
 ## Feature Flags
@@ -31,11 +31,6 @@ This service uses the following Flipt feature flags:
    - When enabled: Immediate booking confirmation
    - When disabled: Booking goes to "pending" status
    - Useful for A/B testing conversion rates
-
-4. **similar-hotels** (default: false)
-   - Controls similar hotel recommendations
-   - When enabled: Shows up to 3 similar hotels
-   - Tracks engagement with recommendations
 
 ### Variant Flags
 
@@ -75,15 +70,30 @@ Content-Type: application/json
 }
 ```
 
-### Get Similar Hotels
+### Get Booking
 ```bash
-GET /api/hotels/hotel-1/similar?entity_id=user-123
+GET /api/bookings/booking-123
 ```
 
-### Get Popular Hotels
+### Get All Bookings
 ```bash
-GET /api/hotels/popular?region=Florida
+GET /api/bookings?status=pending
 ```
+
+Returns all bookings, optionally filtered by status (`pending`, `confirmed`, `rejected`). Used by admin-service to retrieve bookings.
+
+### Update Booking
+```bash
+PATCH /api/bookings/booking-123
+Content-Type: application/json
+
+{
+  "status": "confirmed",
+  "confirmation_number": "CNF-ABC123"
+}
+```
+
+Updates booking status and/or confirmation number. Both fields are optional. Used by admin-service to approve or reject bookings.
 
 ## Metrics
 
@@ -153,13 +163,13 @@ You can test different feature flag configurations by:
 
 ## Integration with Demo
 
-This service integrates with the TravelCo demo webapp by:
+This service integrates with the TravelCo demo:
 
-1. Providing hotel search backend functionality
-2. Sharing the same Flipt instance and feature flags
-3. Exporting metrics to the same Prometheus instance
-4. Sending traces to the same Jaeger instance
-5. Demonstrating multi-language Flipt client usage (Python vs React)
+1. **Webapp**: Provides hotel search and booking backend functionality
+2. **Admin Service**: Exposes booking management endpoints for approval/rejection workflows
+3. **Flipt**: Shares the same feature flags for consistent behavior
+4. **Observability**: Exports metrics to Prometheus and traces to Jaeger
+5. **Multi-language**: Demonstrates Python SDK usage alongside React and Go clients
 
 ## Architecture
 
@@ -167,9 +177,16 @@ This service integrates with the TravelCo demo webapp by:
 ┌─────────────┐     ┌──────────────┐     ┌─────────┐
 │   Webapp    │────▶│ Hotel Service│────▶│  Flipt  │
 │  (React)    │     │   (Python)   │     │   v2    │
-└─────────────┘     └──────────────┘     └─────────┘
+└─────────────┘     └──────┬───────┘     └─────────┘
                            │                    
-                           ├──────▶ Jaeger (traces)
+                    ┌──────┴─────┐
+                    ▼            │
+            ┌──────────────┐     │
+            │Admin Service │     │
+            │    (Go)      │     │
+            └──────────────┘     │
+                           │     │
+                           ├─────┴──────▶ Jaeger (traces)
                            │
                            └──────▶ Prometheus (metrics)
 ```

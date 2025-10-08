@@ -33,8 +33,8 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
     │   (Port 8000)    │   │                  │     │
     └─────────┬────────┘   └──┬────┬──────┬───┘     │
               │               │    │      │         │
-              │               │    │      │         │
-    ┌─────────▼────────┐      │    │      └───────┐ │
+              ▲               │    │      │         │
+    ┌─────────┴────────┐      │    │      └───────┐ │
     │  Admin Service   │      │    │              │ │
     │    Go/HTTP       │──────┘    │    ┌─────────▼─┴───┐
     │   (Port 8001)    │           │    │    Gitea      │
@@ -90,7 +90,6 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
   - `real-time-availability` (boolean): Enable live room availability
   - `loyalty-program` (boolean): Show loyalty discounts (10% off)
   - `instant-booking` (boolean): Immediate vs pending confirmations
-  - `similar-hotels` (boolean): Show hotel recommendations
 - **Telemetry**: Full OpenTelemetry integration (traces + metrics)
 
 ### 3. Admin Service (Go + Standard HTTP)
@@ -108,6 +107,8 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
 - **Features**:
   - View all bookings (pending, confirmed, rejected)
   - Approve/reject bookings with feature flag evaluation
+  - Automatically update booking status in hotel-service
+  - Generate confirmation numbers for approved bookings
   - Real-time flag updates via streaming (5-second polling)
   - Intelligent approval routing based on booking value and hotel category
 - **Telemetry**: Full OpenTelemetry integration (traces + metrics)
@@ -232,13 +233,15 @@ Once started, you can access:
 
 ### Scenario 6: Admin Booking Approval Workflow
 
-1. Open Admin Service at <http://localhost:8001/api/bookings>
-2. View pending bookings from the hotel service
-3. Go to Flipt UI and enable `auto-approval` flag with constraints
-4. Set approval rules based on booking value (e.g., auto-approve under $500)
-5. Approve a booking via `POST /api/bookings/{id}/approve`
-6. See approval tier assigned (standard/premium/vip) based on booking value
-7. View traces in Jaeger showing flag evaluation and approval flow
+1. Book a hotel via webapp at <http://localhost:4000> (without instant-booking enabled)
+2. Open Admin Service at <http://localhost:8001/api/bookings?status=pending>
+3. View pending bookings from the hotel service
+4. Go to Flipt UI and configure `auto-approval` and `approval-tier` flags
+5. Set approval rules based on booking value (e.g., auto-approve under $500)
+6. Approve a booking via `POST /api/bookings/{id}/approve`
+7. Booking status is updated to "confirmed" with a confirmation number
+8. View traces in Jaeger showing flag evaluation, approval flow, and PATCH update
+9. Check the booking status via hotel service: `GET /api/bookings/{id}`
 
 ### Scenario 7: Multi-tier Approval Strategy
 
@@ -246,8 +249,10 @@ Once started, you can access:
 2. Set segments: high-value bookings (>$1000) → VIP tier
 3. Set segments: premium hotels → Premium tier  
 4. Default bookings → Standard tier
-5. Test different bookings to see tier assignment
-6. Monitor in Prometheus: `admin_booking_approvals_total` by tier
+5. Create bookings with different price points and hotels
+6. Approve bookings via admin service to see tier assignment
+7. Monitor in Prometheus: `admin_booking_approvals_total` by tier
+8. Review traces in Jaeger to see how context affects tier evaluation
 
 ## Feature Flags Configuration
 
@@ -259,7 +264,6 @@ All feature flags are defined in `gitea/features.yaml`:
 - `real-time-availability`: Live room availability updates
 - `loyalty-program`: Loyalty member discounts
 - `instant-booking`: Instant confirmation flow
-- `similar-hotels`: Hotel recommendations
 - `auto-approval`: Automatic booking approval for low-risk bookings
 
 ### Variant Flags
