@@ -75,12 +75,6 @@ booking_counter = meter.create_counter(
     unit="1",
 )
 
-feature_flag_counter = meter.create_counter(
-    name="feature_flag_evaluations_total",
-    description="Total number of feature flag evaluations",
-    unit="1",
-)
-
 price_strategy_histogram = meter.create_histogram(
     name="price_display_strategy_usage",
     description="Usage of different price display strategies",
@@ -147,11 +141,6 @@ async def search_hotels_endpoint(
         search_counter.add(1, {
             "location": location or "all",
             "has_dates": str(checkin is not None and checkout is not None),
-        })
-        
-        feature_flag_counter.add(1, {
-            "flag": "price-display-strategy",
-            "value": price_strategy,
         })
         
         price_strategy_histogram.record(1, {"strategy": price_strategy})

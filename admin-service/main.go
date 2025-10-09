@@ -4,16 +4,17 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/flipt-io/labs/admin-service/hotelclient"
 	sdk "go.flipt.io/flipt-client"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
@@ -21,62 +22,61 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
-	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
 //go:embed openapi.json
 var openAPISpec []byte
 
+var errAutoApprovalEnabled = errors.New("cannot manually approve/reject when auto-approval is enabled")
 var (
 	tracer trace.Tracer
 	meter  metric.Meter
 )
 
-type Booking struct {
-	BookingID          string    `json:"booking_id"`
-	HotelID            string    `json:"hotel_id"`
-	Status             string    `json:"status"`
-	ConfirmationNumber *string   `json:"confirmation_number"`
-	TotalPrice         float64   `json:"total_price"`
-	GuestName          string    `json:"guest_name"`
-	GuestEmail         string    `json:"guest_email"`
-	Checkin            string    `json:"checkin"`
-	Checkout           string    `json:"checkout"`
-	Guests             int       `json:"guests"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
-}
-
 type AdminService struct {
 	fliptClient     *sdk.Client
-	hotelServiceURL string
+	hotelClient     *hotelclient.Client
 	approvalCounter metric.Int64Counter
 	viewCounter     metric.Int64Counter
 }
 
-func NewAdminService(fliptClient *sdk.Client, hotelServiceURL string) *AdminService {
-	approvalCounter, _ := meter.Int64Counter(
-		"admin_booking_approvals_total",
-		metric.WithDescription("Total number of booking approvals"),
-	)
-
+func NewAdminService(fliptClient *sdk.Client, hotelClient *hotelclient.Client) *AdminService {
 	viewCounter, _ := meter.Int64Counter(
 		"admin_booking_views_total",
 		metric.WithDescription("Total number of booking views"),
 	)
 
+	approvalCounter, _ := meter.Int64Counter(
+		"admin_booking_approvals_total",
+		metric.WithDescription("Total number of booking approvals"),
+	)
+
 	service := &AdminService{
 		fliptClient:     fliptClient,
-		hotelServiceURL: hotelServiceURL,
-		approvalCounter: approvalCounter,
+		hotelClient:     hotelClient,
 		viewCounter:     viewCounter,
+		approvalCounter: approvalCounter,
 	}
 
 	return service
 }
 
-func (s *AdminService) evaluateApprovalRules(ctx context.Context, booking *Booking) (bool, string, error) {
+func (s *AdminService) AutoApprovalEnabled(ctx context.Context) bool {
+	req := &sdk.EvaluationRequest{
+		FlagKey:  "auto-approval",
+		EntityID: "worker",
+		Context:  map[string]string{},
+	}
+	result, err := s.fliptClient.EvaluateBoolean(ctx, req)
+	if err != nil {
+		log.Printf("Error evaluating auto_approval flag: %v", err)
+		return false
+	}
+	return result.Enabled
+}
+
+func (s *AdminService) evaluateApprovalRules(ctx context.Context, booking *hotelclient.Booking) (string, error) {
 	span := trace.SpanFromContext(ctx)
 	span.SetAttributes(
 		attribute.String("booking_id", booking.BookingID),
@@ -84,32 +84,7 @@ func (s *AdminService) evaluateApprovalRules(ctx context.Context, booking *Booki
 		attribute.Float64("total_price", booking.TotalPrice),
 	)
 
-	// Evaluate auto-approval feature flag
 	req := &sdk.EvaluationRequest{
-		FlagKey:  "auto-approval",
-		EntityID: booking.GuestEmail,
-		Context: map[string]string{
-			"hotel_id":    booking.HotelID,
-			"total_price": fmt.Sprintf("%.2f", booking.TotalPrice),
-			"guests":      fmt.Sprintf("%d", booking.Guests),
-		},
-	}
-	autoApproval, err := s.fliptClient.EvaluateBoolean(ctx, req)
-	if err != nil {
-		log.Printf("Error evaluating auto-approval flag: %v", err)
-		span.RecordError(err)
-		return false, "", err
-	}
-
-	span.AddEvent("feature_flag.evaluation", trace.WithAttributes(
-		semconv.FeatureFlagKey("auto-approval"),
-		semconv.FeatureFlagResultVariant(strconv.FormatBool(autoApproval.Enabled)),
-		semconv.FeatureFlagResultReasonKey.String(autoApproval.Reason),
-		semconv.FeatureFlagContextID(booking.BookingID),
-	))
-
-	// Evaluate approval tier variant flag to determine review level
-	req = &sdk.EvaluationRequest{
 		FlagKey:  "approval-tier",
 		EntityID: booking.GuestEmail,
 		Context: map[string]string{
@@ -121,17 +96,10 @@ func (s *AdminService) evaluateApprovalRules(ctx context.Context, booking *Booki
 	if err != nil {
 		log.Printf("Error evaluating approval-tier flag: %v", err)
 		span.RecordError(err)
-		return false, "", err
+		return "", err
 	}
 
-	span.AddEvent("feature_flag.evaluation", trace.WithAttributes(
-		semconv.FeatureFlagKey("approval-tier"),
-		semconv.FeatureFlagResultVariant((approvalTier.VariantKey)),
-		semconv.FeatureFlagResultReasonKey.String(approvalTier.Reason),
-		semconv.FeatureFlagContextID(booking.BookingID),
-	))
-
-	return autoApproval.Enabled, approvalTier.VariantKey, nil
+	return approvalTier.VariantKey, nil
 }
 
 func (s *AdminService) GetBookings(w http.ResponseWriter, r *http.Request) {
@@ -144,50 +112,14 @@ func (s *AdminService) GetBookings(w http.ResponseWriter, r *http.Request) {
 	}
 	span.SetAttributes(attribute.String("status_filter", status))
 
-	// Fetch bookings from hotel-service
-	hotelServiceURL := fmt.Sprintf("%s/api/bookings?status=%s", s.hotelServiceURL, status)
-	req, err := http.NewRequestWithContext(ctx, "GET", hotelServiceURL, nil)
-	if err != nil {
-		log.Printf("Error creating request to hotel-service: %v", err)
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch bookings"})
-		return
-	}
-
-	// Propagate trace context
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	// Fetch bookings from hotel-service using client
+	bookings, err := s.getBookings(ctx, status)
 	if err != nil {
 		log.Printf("Error fetching bookings from hotel-service: %v", err)
 		span.RecordError(err)
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch bookings"})
 		return
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("Hotel service returned status %d", resp.StatusCode)
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch bookings from hotel service"})
-		return
-	}
-
-	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("Error decoding response: %v", err)
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to parse bookings"})
-		return
-	}
-
-	bookings, ok := result["bookings"].([]any)
-	if !ok {
-		bookings = []any{}
-	}
-
-	s.viewCounter.Add(ctx, 1, metric.WithAttributes(
-		attribute.String("status", status),
-		attribute.Int("count", len(bookings)),
-	))
 
 	log.Printf("Retrieved %d bookings with status=%s from hotel-service", len(bookings), status)
 
@@ -198,49 +130,37 @@ func (s *AdminService) GetBookings(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *AdminService) getBookings(ctx context.Context, status string) ([]hotelclient.Booking, error) {
+	bookings, err := s.hotelClient.GetBookings(ctx, status)
+	if err != nil {
+		return nil, err
+	}
+
+	s.viewCounter.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("status", status),
+		attribute.Int("count", len(bookings)),
+	))
+	return bookings, nil
+}
+
 func (s *AdminService) GetBooking(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(r.Context(), "get_booking")
 	defer span.End()
 
-	bookingID := strings.TrimPrefix(r.URL.Path, "/api/bookings/")
+	bookingID := r.PathValue("booking_id")
 	span.SetAttributes(attribute.String("booking_id", bookingID))
 
-	// Fetch specific booking from hotel-service
-	hotelServiceURL := fmt.Sprintf("%s/api/bookings/%s", s.hotelServiceURL, bookingID)
-	req, err := http.NewRequestWithContext(ctx, "GET", hotelServiceURL, nil)
+	// Fetch specific booking from hotel-service using client
+	booking, err := s.hotelClient.GetBooking(ctx, bookingID)
 	if err != nil {
-		log.Printf("Error creating request to hotel-service: %v", err)
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch booking"})
-		return
-	}
-
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			span.SetAttributes(attribute.Bool("found", false))
+			respondJSON(w, http.StatusNotFound, map[string]string{"error": "Booking not found"})
+			return
+		}
 		log.Printf("Error fetching booking from hotel-service: %v", err)
 		span.RecordError(err)
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch booking"})
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		span.SetAttributes(attribute.Bool("found", false))
-		respondJSON(w, http.StatusNotFound, map[string]string{"error": "Booking not found"})
-		return
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch booking"})
-		return
-	}
-
-	var booking map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&booking); err != nil {
-		log.Printf("Error decoding response: %v", err)
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to parse booking"})
 		return
 	}
 
@@ -256,129 +176,39 @@ func (s *AdminService) ApproveBooking(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(r.Context(), "approve_booking")
 	defer span.End()
 
-	path := strings.TrimPrefix(r.URL.Path, "/api/bookings/")
-	bookingID := strings.TrimSuffix(path, "/approve")
+	bookingID := r.PathValue("booking_id")
 	span.SetAttributes(attribute.String("booking_id", bookingID))
 
-	// Fetch the specific booking from hotel-service
-	hotelServiceURL := fmt.Sprintf("%s/api/bookings/%s", s.hotelServiceURL, bookingID)
-	req, err := http.NewRequestWithContext(ctx, "GET", hotelServiceURL, nil)
+	// Fetch the specific booking from hotel-service using client
+	booking, err := s.hotelClient.GetBooking(ctx, bookingID)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch booking"})
-		return
-	}
-
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			span.SetAttributes(attribute.Bool("found", false))
+			respondJSON(w, http.StatusNotFound, map[string]string{"error": "Booking not found"})
+			return
+		}
 		span.RecordError(err)
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch booking"})
 		return
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		span.SetAttributes(attribute.Bool("found", false))
-		respondJSON(w, http.StatusNotFound, map[string]string{"error": "Booking not found"})
+	if s.AutoApprovalEnabled(ctx) {
+		span.RecordError(errAutoApprovalEnabled)
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": errAutoApprovalEnabled.Error()})
 		return
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch booking"})
-		return
-	}
-
-	var bMap map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&bMap); err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to parse booking"})
-		return
-	}
-
-	// Parse booking data
-	booking := &Booking{
-		BookingID:  bookingID,
-		HotelID:    bMap["hotel_id"].(string),
-		Status:     bMap["status"].(string),
-		TotalPrice: bMap["total_price"].(float64),
-		GuestName:  bMap["guest_name"].(string),
-		GuestEmail: bMap["guest_email"].(string),
-		Checkin:    bMap["checkin"].(string),
-		Checkout:   bMap["checkout"].(string),
-		Guests:     int(bMap["guests"].(float64)),
-	}
-
-	if booking.Status != "pending" {
-		span.SetAttributes(attribute.String("current_status", booking.Status))
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("Booking is already %s", booking.Status)})
-		return
-	}
-
-	// Evaluate approval rules using Flipt
-	autoApprove, tier, err := s.evaluateApprovalRules(ctx, booking)
+	err = s.approveBooking(ctx, booking, false)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to evaluate approval rules"})
-		return
-	}
-
-	span.SetAttributes(
-		attribute.Bool("auto_approved", autoApprove),
-		attribute.String("approval_tier", tier),
-	)
-
-	// Generate confirmation number
-	confirmationNumber := fmt.Sprintf("CNF-%s-%d", strings.ToUpper(bookingID[:8]), time.Now().Unix()%10000)
-
-	// Update booking status in hotel-service via PATCH
-	updatePayload := map[string]string{
-		"status":              "confirmed",
-		"confirmation_number": confirmationNumber,
-	}
-	updateJSON, err := json.Marshal(updatePayload)
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to prepare update"})
-		return
-	}
-
-	patchURL := fmt.Sprintf("%s/api/bookings/%s", s.hotelServiceURL, bookingID)
-	patchReq, err := http.NewRequestWithContext(ctx, "PATCH", patchURL, strings.NewReader(string(updateJSON)))
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update booking"})
-		return
-	}
-	patchReq.Header.Set("Content-Type", "application/json")
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(patchReq.Header))
-
-	patchResp, err := client.Do(patchReq)
-	if err != nil {
+		log.Printf("Hotel service error when updating booking: %v", err)
 		span.RecordError(err)
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update booking status"})
-		return
-	}
-	defer patchResp.Body.Close()
-
-	if patchResp.StatusCode != http.StatusOK {
-		log.Printf("Hotel service returned status %d when updating booking", patchResp.StatusCode)
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to confirm booking"})
 		return
 	}
 
-	s.approvalCounter.Add(ctx, 1, metric.WithAttributes(
-		attribute.String("booking_id", bookingID),
-		attribute.Bool("auto_approved", autoApprove),
-		attribute.String("tier", tier),
-	))
-
-	log.Printf("Booking approved and confirmed: %s, tier: %s, auto: %v, confirmation: %s", bookingID, tier, autoApprove, confirmationNumber)
-
 	respondJSON(w, http.StatusOK, map[string]any{
-		"booking_id":          bookingID,
-		"auto_approved":       autoApprove,
-		"approval_tier":       tier,
-		"status":              "confirmed",
-		"confirmation_number": confirmationNumber,
-		"message":             "Booking approved and confirmed successfully",
+		"booking_id": bookingID,
+		"status":     "confirmed",
+		"message":    "Booking approved and confirmed successfully",
 	})
 }
 
@@ -386,8 +216,7 @@ func (s *AdminService) RejectBooking(w http.ResponseWriter, r *http.Request) {
 	ctx, span := tracer.Start(r.Context(), "reject_booking")
 	defer span.End()
 
-	path := strings.TrimPrefix(r.URL.Path, "/api/bookings/")
-	bookingID := strings.TrimSuffix(path, "/reject")
+	bookingID := r.PathValue("booking_id")
 	span.SetAttributes(attribute.String("booking_id", bookingID))
 
 	var req struct {
@@ -398,77 +227,29 @@ func (s *AdminService) RejectBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch specific booking from hotel-service to verify it exists
-	hotelServiceURL := fmt.Sprintf("%s/api/bookings/%s", s.hotelServiceURL, bookingID)
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", hotelServiceURL, nil)
+	// Fetch specific booking from hotel-service to verify it exists and check status
+	booking, err := s.hotelClient.GetBooking(ctx, bookingID)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch booking"})
-		return
-	}
-
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(httpReq.Header))
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			span.SetAttributes(attribute.Bool("found", false))
+			respondJSON(w, http.StatusNotFound, map[string]string{"error": "Booking not found"})
+			return
+		}
 		span.RecordError(err)
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch booking"})
 		return
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusNotFound {
-		span.SetAttributes(attribute.Bool("found", false))
-		respondJSON(w, http.StatusNotFound, map[string]string{"error": "Booking not found"})
+	if s.AutoApprovalEnabled(ctx) {
+		span.RecordError(errAutoApprovalEnabled)
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": errAutoApprovalEnabled.Error()})
 		return
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to fetch booking"})
-		return
-	}
-
-	var booking map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&booking); err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to parse booking"})
-		return
-	}
-
-	status := booking["status"].(string)
-	if status != "pending" {
-		respondJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("Booking is already %s", status)})
-		return
-	}
-
-	// Update booking status in hotel-service via PATCH
-	updatePayload := map[string]string{
-		"status": "rejected",
-	}
-	updateJSON, err := json.Marshal(updatePayload)
+	err = s.rejectBooking(ctx, booking, req.Reason, false)
 	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to prepare update"})
-		return
-	}
-
-	patchURL := fmt.Sprintf("%s/api/bookings/%s", s.hotelServiceURL, bookingID)
-	patchReq, err := http.NewRequestWithContext(ctx, "PATCH", patchURL, strings.NewReader(string(updateJSON)))
-	if err != nil {
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update booking"})
-		return
-	}
-	patchReq.Header.Set("Content-Type", "application/json")
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(patchReq.Header))
-
-	patchResp, err := client.Do(patchReq)
-	if err != nil {
+		log.Printf("Hotel service error when updating booking: %v", err)
 		span.RecordError(err)
-		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update booking status"})
-		return
-	}
-	defer patchResp.Body.Close()
-
-	if patchResp.StatusCode != http.StatusOK {
-		log.Printf("Hotel service returned status %d when updating booking", patchResp.StatusCode)
 		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to reject booking"})
 		return
 	}
@@ -476,8 +257,6 @@ func (s *AdminService) RejectBooking(w http.ResponseWriter, r *http.Request) {
 	span.SetAttributes(
 		attribute.String("reason", req.Reason),
 	)
-
-	log.Printf("Booking rejected: %s, reason: %s", bookingID, req.Reason)
 
 	respondJSON(w, http.StatusOK, map[string]any{
 		"booking_id": bookingID,
@@ -531,6 +310,80 @@ func (s *AdminService) GetFlagStatus(w http.ResponseWriter, r *http.Request) {
 			"reason":  approvalTier.Reason,
 		},
 	})
+}
+
+func (s *AdminService) processBooking(ctx context.Context, booking *hotelclient.Booking) error {
+	// Fetch hotel details to check available rooms using hotel client
+	hotel, err := s.hotelClient.GetHotelAvialibility(ctx, booking.HotelID, booking.Checkin, booking.Checkout, booking.Guests)
+	if err != nil {
+		log.Printf("Error fetching hotel %s: %v", booking.HotelID, err)
+		return err
+	}
+
+	// Check if hotel has available rooms
+	if hotel.AvailableRooms > 0 {
+		log.Printf("Approving booking %s - hotel %s has %d available rooms", booking.BookingID, hotel.ID, hotel.AvailableRooms)
+		return s.approveBooking(ctx, booking, true)
+	}
+
+	log.Printf("Rejecting booking %s - hotel %s has no available rooms", booking.BookingID, hotel.ID)
+	return s.rejectBooking(ctx, booking, "No rooms available", true)
+}
+
+func (s *AdminService) approveBooking(ctx context.Context, booking *hotelclient.Booking, autoApproval bool) error {
+	if booking.Status != "pending" {
+		return fmt.Errorf("booking is already %s", booking.Status)
+	}
+
+	// Evaluate approval rules using Flipt
+	tier, err := s.evaluateApprovalRules(ctx, booking)
+	if err != nil {
+		return err
+	}
+
+	confirmationNumber := fmt.Sprintf("CNF-%s-%d", strings.ToUpper(booking.BookingID[:8]), time.Now().Unix()%10000)
+	err = s.hotelClient.UpdateBooking(ctx, booking.BookingID, hotelclient.BookingUpdateRequest{
+		Status:             "confirmed",
+		ConfirmationNumber: &confirmationNumber,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to approve booking: %w", err)
+	}
+
+	s.approvalCounter.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("booking_id", booking.BookingID),
+		attribute.String("hotel_id", booking.HotelID),
+		attribute.String("status", "approved"),
+		attribute.String("tier", tier),
+		attribute.Bool("auto_approval", autoApproval),
+	))
+
+	log.Printf("Booking %s auto-approved with confirmation %s", booking.BookingID, confirmationNumber)
+	return nil
+}
+
+func (s *AdminService) rejectBooking(ctx context.Context, booking *hotelclient.Booking, reason string, autoApproval bool) error {
+	if booking.Status != "pending" {
+		return fmt.Errorf("booking is already %s", booking.Status)
+	}
+
+	err := s.hotelClient.UpdateBooking(ctx, booking.BookingID, hotelclient.BookingUpdateRequest{
+		Status: "rejected",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to reject booking: %w", err)
+	}
+
+	s.approvalCounter.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("booking_id", booking.BookingID),
+		attribute.String("hotel_id", booking.HotelID),
+		attribute.String("status", "rejected"),
+		attribute.String("reason", reason),
+		attribute.Bool("auto_approval", autoApproval),
+	))
+
+	log.Printf("Booking %s auto-rejected: %s", booking.BookingID, reason)
+	return nil
 }
 
 // HTTP middleware for CORS
@@ -640,8 +493,15 @@ func main() {
 
 	log.Println("Flipt client initialized with streaming enabled")
 
+	// Create hotel service client
+	hotelClient := hotelclient.NewClient(hotelServiceURL, httpClient)
+
 	// Create admin service
-	adminService := NewAdminService(fliptClient, hotelServiceURL)
+	adminService := NewAdminService(fliptClient, hotelClient)
+
+	// Create and start auto-approval worker
+	worker := NewAutoApprovalWorker(adminService)
+	go worker.Start(ctx)
 
 	// Setup HTTP router
 	mux := http.NewServeMux()
@@ -704,44 +564,11 @@ func main() {
 	})
 
 	// API routes
-	mux.HandleFunc("/api/bookings", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			adminService.GetBookings(w, r)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-
-	mux.HandleFunc("/api/bookings/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		if strings.HasSuffix(path, "/approve") {
-			if r.Method == http.MethodPost {
-				adminService.ApproveBooking(w, r)
-			} else {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			}
-		} else if strings.HasSuffix(path, "/reject") {
-			if r.Method == http.MethodPost {
-				adminService.RejectBooking(w, r)
-			} else {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			}
-		} else {
-			if r.Method == http.MethodGet {
-				adminService.GetBooking(w, r)
-			} else {
-				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			}
-		}
-	})
-
-	mux.HandleFunc("/api/flags", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
-			adminService.GetFlagStatus(w, r)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	mux.HandleFunc("GET /api/bookings", adminService.GetBookings)
+	mux.HandleFunc("GET /api/bookings/{booking_id}", adminService.GetBooking)
+	mux.HandleFunc("POST /api/bookings/{booking_id}/approve", adminService.ApproveBooking)
+	mux.HandleFunc("POST /api/bookings/{booking_id}/reject", adminService.ApproveBooking)
+	mux.HandleFunc("GET /api/flags", adminService.GetFlagStatus)
 
 	// Apply middlewares
 	handler := corsMiddleware(tracingMiddleware(mux))

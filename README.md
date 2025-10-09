@@ -324,7 +324,6 @@ Visit <http://localhost:9090> and query:
 hotel_searches_total
 hotel_availability_checks_total
 hotel_bookings_total
-feature_flag_evaluations_total
 price_display_strategy_usage_bucket
 
 # Admin service metrics

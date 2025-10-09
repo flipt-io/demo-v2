@@ -268,17 +268,7 @@
       "get": {
         "summary": "Get flag status",
         "description": "Get current status of Flipt feature flags",
-        "parameters": [
-          {
-            "name": "entity_id",
-            "in": "query",
-            "description": "Entity ID for flag evaluation",
-            "schema": {
-              "type": "string",
-              "default": "admin"
-            }
-          }
-        ],
+        "parameters": [],
         "responses": {
           "200": {
             "description": "Flag status",
@@ -344,7 +334,7 @@
           "total_price": {
             "type": "number",
             "format": "float",
-            "example": 450.00
+            "example": 450.0
           },
           "guest_name": {
             "type": "string",

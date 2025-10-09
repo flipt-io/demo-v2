@@ -227,7 +227,7 @@ function App() {
             <nav>
               <button
                 onClick={handleExploreClick}
-                className="px-3 hover-underline"
+                className="bg-gray-200 text-gray-700 px-6 py-2 font-semibold rounded hover:bg-gray-300"
               >
                 ← Back
               </button>
