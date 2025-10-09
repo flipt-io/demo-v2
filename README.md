@@ -2,8 +2,7 @@
 
 A comprehensive demonstration of Flipt v2 feature management platform showcasing a travel booking application with webapp (React), hotel (Python) and admin services (Go) using feature flags with both client-side and server-side SDK patterns.
 
-> [!WARNING] Demo Project Disclaimer
->
+> [!WARNING]
 > This is a demonstration project designed to showcase Flipt's feature flag capabilities and integration patterns. It is **not intended for production use** and does not follow production best practices (e.g., authentication, data persistence, error handling, security measures, etc.). The goal is to demonstrate various ways to integrate and use Flipt across different programming languages and architectures.
 
 ## Overview
