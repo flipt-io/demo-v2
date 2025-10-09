@@ -620,6 +620,9 @@ func main() {
 		Timeout:   12 * time.Hour,
 	}
 
+	// Create Flipt hook for tracking evaluations
+	fliptHook := NewFliptHook(environment, namespace)
+
 	// Initialize Flipt client with streaming and instrumented HTTP client
 	fliptClient, err := sdk.NewClient(
 		ctx,
@@ -628,6 +631,7 @@ func main() {
 		sdk.WithEnvironment(environment),
 		sdk.WithFetchMode(sdk.FetchModeStreaming),
 		sdk.WithHTTPClient(httpClient),
+		sdk.WithHook(fliptHook),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create Flipt client: %v", err)
