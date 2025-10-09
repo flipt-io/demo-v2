@@ -128,8 +128,16 @@ async def search_hotels_endpoint(
         }
         
         price_strategy = flipt_service.get_price_display_strategy(entity_id, context)
-        real_time_avail = flipt_service.is_real_time_availability_enabled(entity_id, context)
-        loyalty_enabled = flipt_service.is_loyalty_program_enabled(entity_id, context)
+        
+        # Batch evaluate boolean flags for better performance
+        batch_flags = flipt_service.evaluate_batch_boolean(
+            flag_keys=["real-time-availability", "loyalty-program"],
+            entity_id=entity_id,
+            context=context,
+            defaults={"real-time-availability": True, "loyalty-program": False}
+        )
+        real_time_avail = batch_flags["real-time-availability"]
+        loyalty_enabled = batch_flags["loyalty-program"]
         
         span.set_attribute("feature.price_strategy", price_strategy)
         span.set_attribute("feature.real_time_availability", real_time_avail)
@@ -318,12 +326,18 @@ async def book_hotel(
         )
         
         # Store booking in memory
+        # Get total price from breakdown if available, otherwise use display_price
+        if price_info["breakdown"] and "total" in price_info["breakdown"]:
+            total_price = price_info["breakdown"]["total"]
+        else:
+            total_price = price_info["display_price"]
+        
         booking_data = {
             "booking_id": booking_id,
             "hotel_id": hotel_id,
             "status": status,
             "confirmation_number": confirmation,
-            "total_price": price_info["display_price"],
+            "total_price": total_price,
             "guest_name": booking.guest_name,
             "guest_email": booking.guest_email,
             "checkin": booking.checkin,
@@ -339,7 +353,7 @@ async def book_hotel(
             hotel_id=hotel_id,
             status=status,
             confirmation_number=confirmation,
-            total_price=price_info["display_price"],
+            total_price=booking_data["total_price"],
             created_at=datetime.utcnow(),
         )
 

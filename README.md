@@ -1,6 +1,6 @@
 # Flipt v2 Demo - TravelCo
 
-A comprehensive demonstration of Flipt v2 feature management platform showcasing a travel booking application with both frontend (React) and backend (Python) services using feature flags.
+A comprehensive demonstration of Flipt v2 feature management platform showcasing a travel booking application with frontend (React), backend (Python), and admin services (Go) using feature flags with both client-side and server-side SDK patterns.
 
 > **⚠️ Demo Project Disclaimer**
 >
@@ -10,12 +10,18 @@ A comprehensive demonstration of Flipt v2 feature management platform showcasing
 
 This demo represents **TravelCo**, a fictional travel company's booking platform that uses Flipt feature flags to control various aspects of the user experience and backend functionality.
 
+**SDK Architecture:**
+
+- **Client-Side SDKs** (Webapp & Admin Service): Evaluate flags directly in the browser/client, fetching flag state and evaluating locally for low-latency decisions
+- **Server-Side SDK** (Hotel Service): Evaluates flags on the server via direct API calls to Flipt, suitable for backend services and sensitive business logic
+
 ### Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                         Browser                          │
 │              http://localhost:4000                       │
+│         Webapp (Client-Side SDK - React)                 │
 └────────────────────────┬─────────────────────────────────┘
                          │
                          ▼
@@ -30,6 +36,7 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
     ┌─────────▼────────┐   ┌─────────▼────────┐
     │   Hotel Service  │   │   Flipt v2       │
     │  Python/FastAPI  │──►│  (Port 8080)     │◄────┐
+    │  (Server SDK)    │   │                  │     │
     │   (Port 8000)    │   │                  │     │
     └─────────┬────────┘   └──┬────┬──────┬───┘     │
               │               │    │      │         │
@@ -37,9 +44,9 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
     ┌─────────┴────────┐      │    │      └───────┐ │
     │  Admin Service   │      │    │              │ │
     │    Go/HTTP       │──────┘    │    ┌─────────▼─┴───┐
-    │   (Port 8001)    │           │    │    Gitea      │
-    └─────────┬────────┘           │    │  (Port 3000)  │
-              │                    │    │Feature Flags  │
+    │ (Client SDK)     │           │    │    Gitea      │
+    │   (Port 8001)    │           │    │  (Port 3000)  │
+    └─────────┬────────┘           │    │Feature Flags  │
               │                    │    └───────────────┘
               │                    │
               │                    └────┐
@@ -65,9 +72,10 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
 
 - **Port**: 4000
 - **Technology**: React 19, Vite, TailwindCSS
-- **Flipt Client**: `@flipt-io/flipt-client-react`
+- **Flipt Client**: `@flipt-io/flipt-client-react` (client-side SDK)
+- **SDK Type**: Client-side - Evaluates flags in the browser for instant UI updates without reloads
 - **Feature Flags**:
-  - `sale` (boolean): Show/hide seasonal sale banner
+  - `sale` (boolean): Show/hide promotional banner
   - `theme` (variant): Dynamic hero background based on season
 - **User Experience**:
   - Browse hotels with dynamic pricing and availability
@@ -79,7 +87,8 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
 
 - **Port**: 8000
 - **Technology**: Python 3.12, FastAPI, Uvicorn
-- **Flipt Client**: `flipt` (Python SDK)
+- **Flipt Client**: `flipt` (Python SDK - server-side)
+- **SDK Type**: Server-side - Makes API calls to Flipt for each evaluation, suitable for backend business logic
 - **API Documentation**: OpenAPI/Swagger UI at root endpoint (`/`)
 - **Feature Flags**:
   - `price-display-strategy` (variant): Control price presentation
@@ -90,13 +99,15 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
   - `real-time-availability` (boolean): Enable live room availability
   - `loyalty-program` (boolean): Show loyalty discounts (10% off)
   - `instant-booking` (boolean): Immediate vs pending confirmations
+- **Performance Optimization**: Uses Flipt batch evaluation API to evaluate `real-time-availability` and `loyalty-program` flags in a single request, reducing network overhead
 - **Telemetry**: Full OpenTelemetry integration (traces + metrics)
 
 ### 3. Admin Service (Go + Standard HTTP)
 
 - **Port**: 8001
 - **Technology**: Go 1.25, Standard HTTP library
-- **Flipt Client**: `flipt-client-go` with streaming support
+- **Flipt Client**: `flipt-client-go` (client-side SDK with streaming support)
+- **SDK Type**: Client-side - Fetches and caches flag state locally, with streaming updates for near real-time flag changes
 - **API Documentation**: OpenAPI/Swagger UI at root endpoint (`/`)
 - **Feature Flags**:
   - `auto-approval` (boolean): Automatically approve low-risk bookings
@@ -214,6 +225,7 @@ Once started, you can access:
 2. Search hotels with different entity IDs
 3. Notice different price display strategies
 4. In Flipt UI, change the `price-display-strategy` variant distributions
+5. Search again in webapp and observe changes
 
 ### Scenario 4: Progressive Feature Rollout
 
@@ -231,7 +243,17 @@ Once started, you can access:
 3. Enable flag for specific user segments
 4. Search again - premium hotels show 10% discount
 
-### Scenario 6: Admin Booking Approval Workflow
+### Scenario 6: Batch Flag Evaluation Performance
+
+1. Open Jaeger at <http://localhost:16686>
+2. Search for traces from the `hotel-service`
+3. Find a hotel search trace and expand it
+4. Notice the `feature_flag.batch_evaluation` span that evaluates both `loyalty-program` and `real-time-availability` flags in a single API call
+5. Compare this to individual evaluations - batch evaluation reduces network overhead
+6. In Flipt UI, toggle both flags on/off
+7. Search hotels again and observe in Jaeger how both flags are evaluated together efficiently
+
+### Scenario 7: Admin Booking Approval Workflow
 
 1. Book a hotel via webapp at <http://localhost:4000> (without instant-booking enabled)
 2. Open Admin Service at <http://localhost:8001/api/bookings?status=pending>
@@ -243,11 +265,23 @@ Once started, you can access:
 8. View traces in Jaeger showing flag evaluation, approval flow, and PATCH update
 9. Check the booking status via hotel service: `GET /api/bookings/{id}`
 
-### Scenario 7: Multi-tier Approval Strategy
+### Scenario 7: Admin Booking Approval Workflow
+
+1. Book a hotel via webapp at <http://localhost:4000> (without instant-booking enabled)
+2. Open Admin Service at <http://localhost:8001/api/bookings?status=pending>
+3. View pending bookings from the hotel service
+4. Go to Flipt UI and configure `auto-approval` and `approval-tier` flags
+5. Set approval rules based on booking value (e.g., auto-approve under $500)
+6. Approve a booking via `POST /api/bookings/{id}/approve`
+7. Booking status is updated to "confirmed" with a confirmation number
+8. View traces in Jaeger showing flag evaluation, approval flow, and PATCH update
+9. Check the booking status via hotel service: `GET /api/bookings/{id}`
+
+### Scenario 8: Multi-tier Approval Strategy
 
 1. In Flipt UI, configure `approval-tier` variant rules
 2. Set segments: high-value bookings (>$1000) → VIP tier
-3. Set segments: premium hotels → Premium tier  
+3. Set segments: premium hotels → Premium tier
 4. Default bookings → Standard tier
 5. Create bookings with different price points and hotels
 6. Approve bookings via admin service to see tier assignment
@@ -278,7 +312,7 @@ All feature flags are defined in `gitea/features.yaml`:
 - `premium-users`: Premium tier users
 - `budget-users`: Budget-conscious users
 - `trusted-bookings`: Low-risk bookings (≤$500)
-- `high-value-bookings`: High-value bookings (≥$1000) 
+- `high-value-bookings`: High-value bookings (≥$1000)
 - `premium-hotels`: Premium/luxury hotel bookings
 
 ## Observability
@@ -336,7 +370,7 @@ Visit <http://localhost:8080>:
 1. Go to Gitea: <http://localhost:3000>
 2. Navigate to `onoffinc/features` repository
 3. Edit `features.yaml`
-4. Commit changes
+4. Commit and push changes
 5. Flipt polls and updates automatically (30s interval)
 
 ## Key Learnings
@@ -344,18 +378,24 @@ Visit <http://localhost:8080>:
 This demo showcases:
 
 1. **Multi-language Support**: React (frontend), Python (backend), and Go (admin service) all using Flipt
-2. **Multiple Flag Types**: Boolean and variant flags with different use cases
-3. **Segmentation**: Context-based targeting (seasonal, user tier, booking value)
-4. **Git-based Storage**: Feature flags as code with version control
-5. **Full Observability**: Traces, metrics, and analytics integration
-6. **Streaming Updates**: Go client with real-time flag synchronization (5-second polling)
-7. **Real-world Use Cases**:
+2. **Client-Side vs Server-Side SDKs**:
+   - **Client-Side** (Webapp & Admin): Fetch flag state and evaluate locally for low latency, with streaming updates
+   - **Server-Side** (Hotel Service): Make API calls to Flipt for each evaluation, ideal for backend services
+3. **Multiple Flag Types**: Boolean and variant flags with different use cases
+4. **Segmentation**: Context-based targeting (seasonal, user tier, booking value)
+5. **Git-based Storage**: Feature flags as code with version control
+6. **Full Observability**: Traces, metrics, and analytics integration
+7. **Streaming Updates**: Go client with real-time flag synchronization (5-second polling)
+8. **Performance Optimization**: Batch evaluation API to reduce network overhead (Python service evaluates multiple boolean flags in a single request)
+9. **Real-world Use Cases**:
    - A/B testing (price strategies)
    - Progressive rollouts (instant booking)
    - Seasonal targeting (themes)
    - Premium features (loyalty program)
    - Intelligent approval routing (admin service)
    - Multi-tier workflows (approval tiers)
+   - Efficient flag evaluation patterns (batch API)
+   - Different SDK patterns for different architectural needs
 
 ## License
 

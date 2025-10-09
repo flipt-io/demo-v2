@@ -164,17 +164,17 @@ def calculate_price_with_strategy(base_price: float, nights: int, strategy: str)
             }
         }
     elif strategy == "with-fees":
-        taxes = total * 0.12
+        taxes = round(total * 0.12, 2)
         fees = 25.00
-        grand_total = total + taxes + fees
+        grand_total = round(total + taxes + fees, 2)
         return {
             "display_price": grand_total,
             "label": "Total with Fees",
             "breakdown": {
-                "base": total,
-                "taxes": round(taxes, 2),
+                "base": round(total, 2),
+                "taxes": taxes,
                 "fees": fees,
-                "total": round(grand_total, 2)
+                "total": grand_total
             }
         }
     elif strategy == "dynamic":
@@ -193,7 +193,7 @@ def calculate_price_with_strategy(base_price: float, nights: int, strategy: str)
         }
     
     return {
-        "display_price": total,
+        "display_price": round(total, 2),
         "label": "Total Price",
         "breakdown": None
     }

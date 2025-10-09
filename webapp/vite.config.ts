@@ -9,6 +9,7 @@ export default defineConfig({
     proxy: {
       "/internal/v1/metrics": "http://localhost:4000/",
       "/internal/v1": "http://localhost:8080/",
+      "/api/": "http://localhost:8000/",
     },
     origin: "http://localhost:5173",
   },

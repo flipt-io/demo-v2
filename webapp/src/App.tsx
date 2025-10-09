@@ -91,7 +91,16 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/hotels?entity_id=${entityId}`);
+      const today = new Date();
+      const checkin = new Date(today);
+      checkin.setDate(today.getDate() + 7);
+      const checkout = new Date(checkin);
+      checkout.setDate(checkin.getDate() + 2);
+      const din = checkin.toISOString().split("T")[0];
+      const dout = checkout.toISOString().split("T")[0];
+      const response = await fetch(
+        `/api/hotels?entity_id=${entityId}&guests=2&checkin=${din}&checkout=${dout}`,
+      );
       if (!response.ok) {
         throw new Error("Failed to fetch hotels");
       }
