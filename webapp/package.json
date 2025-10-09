@@ -17,6 +17,9 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
+  "overrides": {
+    "@flipt-io/flipt-client-js": "^0.3.0"
+  },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
     "@types/react": "^19.1.10",
