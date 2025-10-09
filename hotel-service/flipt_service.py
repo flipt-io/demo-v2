@@ -1,8 +1,8 @@
 import logging
-from typing import Optional
+from typing import Optional, Dict, List
 import flipt
 from opentelemetry import trace
-from flipt.evaluation import EvaluationRequest
+from flipt.evaluation import EvaluationRequest, BatchEvaluationRequest
 
 from config import settings
 
@@ -53,7 +53,12 @@ class FliptService:
                     context=context or {}
                 ))
                 enabled = result.enabled
-                span.set_attribute("feature_flag.result.variant", enabled or "false")
+                span.add_event("feature_flag.evaluated", {
+                    "feature_flag.key": flag_key,
+                    "feature_flag.type": "boolean",
+                    "feature_flag.result.variant": enabled or "false",
+                })
+
                 logger.debug(f"Flag '{flag_key}' evaluated to {enabled} (reason: {result.reason})")
                 return enabled
             except Exception as e:
@@ -89,8 +94,12 @@ class FliptService:
                 variant_key = default
                 if len(result.variant_key) > 0:
                     variant_key = result.variant_key
-                span.set_attribute("feature_flag.result.variant", variant_key or "none")
                 
+                span.add_event("feature_flag.evaluated", {
+                    "feature_flag.key": flag_key,
+                    "feature_flag.type": "variant",
+                    "feature_flag.result.variant": variant_key or "",
+                })
                 logger.debug(f"Flag '{flag_key}' evaluated to variant '{variant_key}' (reason: {result.reason})")
                 return variant_key
             except Exception as e:
@@ -136,14 +145,62 @@ class FliptService:
             default=False
         )
     
-    def is_similar_hotels_enabled(self, entity_id: str, context: dict = None) -> bool:
-        """Check if similar hotels feature is enabled."""
-        return self.evaluate_boolean(
-            flag_key="similar-hotels",
-            entity_id=entity_id,
-            context=context,
-            default=False
-        )
+    def evaluate_batch_boolean(
+        self,
+        flag_keys: List[str],
+        entity_id: str,
+        context: dict = None,
+        defaults: Dict[str, bool] = None
+    ) -> Dict[str, bool]:
+        """Evaluate multiple boolean flags in a single batch request."""
+        defaults = defaults or {}
+        with self.tracer.start_as_current_span("feature_flag.batch_evaluation") as span:
+            span.set_attribute("feature_flag.batch.count", len(flag_keys))
+            
+            if not self.client:
+                logger.warning("Flipt client not available, returning defaults for batch evaluation")
+                return {key: defaults.get(key, False) for key in flag_keys}
+            
+            try:
+                # Build batch request
+                requests = [
+                    EvaluationRequest(
+                        namespace_key=settings.flipt_namespace,
+                        flag_key=flag_key,
+                        entity_id=entity_id,
+                        context=context or {}
+                    )
+                    for flag_key in flag_keys
+                ]
+                
+                batch_request = BatchEvaluationRequest(requests=requests)
+                result = self.client.evaluation.batch(batch_request)
+                
+                # Parse results
+                results = {}
+                for response in result.responses:
+                    flag_key = response.boolean_response.flag_key
+                    enabled = response.boolean_response.enabled
+                    results[flag_key] = enabled
+                    logger.debug(f"Batch flag '{flag_key}' evaluated to {enabled}")
+                
+                # Fill in any missing results with defaults
+                for key in flag_keys:
+                    if key not in results:
+                        results[key] = defaults.get(key, False)
+                    span.add_event("feature_flag.evaluated", {
+                        "feature_flag.key": key,
+                        "feature_flag.type": "boolean",
+                        "feature_flag.result.variant": results[key],
+                    })
+
+                
+                return results
+            except Exception as e:
+                logger.error(f"Error evaluating batch flags: {e}")
+                span.set_attribute("error", True)
+                span.set_attribute("error.message", str(e))
+                return {key: defaults.get(key, False) for key in flag_keys}
 
 
 # Global Flipt service instance

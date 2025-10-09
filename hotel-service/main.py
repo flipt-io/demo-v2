@@ -15,6 +15,7 @@ from models import (
     AvailabilityResponse,
     BookingRequest,
     BookingResponse,
+    BookingUpdateRequest,
 )
 from data import (
     get_all_hotels,
@@ -127,8 +128,16 @@ async def search_hotels_endpoint(
         }
         
         price_strategy = flipt_service.get_price_display_strategy(entity_id, context)
-        real_time_avail = flipt_service.is_real_time_availability_enabled(entity_id, context)
-        loyalty_enabled = flipt_service.is_loyalty_program_enabled(entity_id, context)
+        
+        # Batch evaluate boolean flags for better performance
+        batch_flags = flipt_service.evaluate_batch_boolean(
+            flag_keys=["real-time-availability", "loyalty-program"],
+            entity_id=entity_id,
+            context=context,
+            defaults={"real-time-availability": True, "loyalty-program": False}
+        )
+        real_time_avail = batch_flags["real-time-availability"]
+        loyalty_enabled = batch_flags["loyalty-program"]
         
         span.set_attribute("feature.price_strategy", price_strategy)
         span.set_attribute("feature.real_time_availability", real_time_avail)
@@ -317,12 +326,18 @@ async def book_hotel(
         )
         
         # Store booking in memory
+        # Get total price from breakdown if available, otherwise use display_price
+        if price_info["breakdown"] and "total" in price_info["breakdown"]:
+            total_price = price_info["breakdown"]["total"]
+        else:
+            total_price = price_info["display_price"]
+        
         booking_data = {
             "booking_id": booking_id,
             "hotel_id": hotel_id,
             "status": status,
             "confirmation_number": confirmation,
-            "total_price": price_info["display_price"],
+            "total_price": total_price,
             "guest_name": booking.guest_name,
             "guest_email": booking.guest_email,
             "checkin": booking.checkin,
@@ -338,76 +353,9 @@ async def book_hotel(
             hotel_id=hotel_id,
             status=status,
             confirmation_number=confirmation,
-            total_price=price_info["display_price"],
+            total_price=booking_data["total_price"],
             created_at=datetime.utcnow(),
         )
-
-
-@app.get("/api/hotels/{hotel_id}/similar")
-async def get_similar_hotels(
-    hotel_id: str,
-    entity_id: str = Query("anonymous", description="User/entity ID"),
-):
-    """
-    Get similar hotels (feature flag controlled).
-    """
-    with tracer.start_as_current_span("get_similar_hotels") as span:
-        span.set_attribute("hotel_id", hotel_id)
-        
-        # Check if feature is enabled
-        similar_enabled = flipt_service.is_similar_hotels_enabled(entity_id)
-        span.set_attribute("feature.similar_hotels", similar_enabled)
-        
-        if not similar_enabled:
-            return {
-                "enabled": False,
-                "hotels": [],
-                "message": "Similar hotels feature is not enabled"
-            }
-        
-        # Get the original hotel
-        hotel = get_hotel_by_id(hotel_id)
-        if not hotel:
-            raise HTTPException(status_code=404, detail="Hotel not found")
-        
-        # Find similar hotels (same category, different location)
-        all_hotels = get_all_hotels()
-        similar = [
-            h for h in all_hotels
-            if h["id"] != hotel_id and h["category"] == hotel.category
-        ][:3]  # Return top 3
-        
-        return {
-            "enabled": True,
-            "hotels": similar,
-            "count": len(similar)
-        }
-
-
-@app.get("/api/hotels/popular")
-async def get_popular_hotels(
-    region: Optional[str] = Query(None, description="Filter by region"),
-    entity_id: str = Query("anonymous", description="User/entity ID"),
-):
-    """
-    Get popular hotels (sorted by rating).
-    """
-    with tracer.start_as_current_span("get_popular_hotels") as span:
-        span.set_attribute("region", region or "all")
-        
-        hotels = get_all_hotels()
-        
-        # Filter by region if provided
-        if region:
-            hotels = [h for h in hotels if region.lower() in h["location"].lower()]
-        
-        # Sort by rating
-        hotels.sort(key=lambda x: x["rating"], reverse=True)
-        
-        return {
-            "hotels": hotels[:5],  # Top 5
-            "total_count": len(hotels),
-        }
 
 
 @app.get("/api/bookings")
@@ -448,6 +396,92 @@ async def get_bookings(
             "total": len(serializable_bookings),
             "status": status or "all",
         }
+
+
+@app.get("/api/bookings/{booking_id}")
+async def get_booking(
+    booking_id: str,
+):
+    """
+    Get a specific booking by ID.
+    Used by admin-service to retrieve a single booking.
+    """
+    with tracer.start_as_current_span("get_booking") as span:
+        span.set_attribute("booking_id", booking_id)
+        
+        # Check if booking exists
+        if booking_id not in bookings_storage:
+            span.set_attribute("found", False)
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        booking = bookings_storage[booking_id]
+        span.set_attribute("found", True)
+        span.set_attribute("booking.status", booking["status"])
+        
+        # Create a copy and convert datetime to ISO string for JSON serialization
+        booking_copy = booking.copy()
+        if hasattr(booking_copy["created_at"], "isoformat"):
+            booking_copy["created_at"] = booking_copy["created_at"].isoformat()
+        if hasattr(booking_copy["updated_at"], "isoformat"):
+            booking_copy["updated_at"] = booking_copy["updated_at"].isoformat()
+        
+        logger.info(f"Retrieved booking {booking_id}, status={booking['status']}")
+        
+        return booking_copy
+
+
+@app.patch("/api/bookings/{booking_id}")
+async def update_booking(
+    booking_id: str,
+    update_request: BookingUpdateRequest,
+):
+    """
+    Update a booking's status and/or confirmation number.
+    Used by admin-service to confirm or reject bookings.
+    """
+    with tracer.start_as_current_span("update_booking") as span:
+        span.set_attribute("booking_id", booking_id)
+        
+        # Check if booking exists
+        if booking_id not in bookings_storage:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        booking = bookings_storage[booking_id]
+        
+        # Update fields if provided
+        updated = False
+        if update_request.status is not None:
+            # Validate status
+            valid_statuses = ["pending", "confirmed", "rejected"]
+            if update_request.status not in valid_statuses:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+                )
+            booking["status"] = update_request.status
+            span.set_attribute("updated.status", update_request.status)
+            updated = True
+        
+        if update_request.confirmation_number is not None:
+            booking["confirmation_number"] = update_request.confirmation_number
+            span.set_attribute("updated.confirmation_number", update_request.confirmation_number)
+            updated = True
+        
+        if updated:
+            booking["updated_at"] = datetime.utcnow()
+            logger.info(
+                f"Booking {booking_id} updated: status={booking['status']}, "
+                f"confirmation={booking.get('confirmation_number')}"
+            )
+        
+        # Serialize datetime for response
+        booking_copy = booking.copy()
+        if hasattr(booking_copy["created_at"], "isoformat"):
+            booking_copy["created_at"] = booking_copy["created_at"].isoformat()
+        if hasattr(booking_copy["updated_at"], "isoformat"):
+            booking_copy["updated_at"] = booking_copy["updated_at"].isoformat()
+        
+        return booking_copy
 
 
 if __name__ == "__main__":

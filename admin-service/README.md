@@ -32,37 +32,22 @@ GET /api/bookings/{id}
 
 Returns details for a specific booking.
 
-#### Create Booking
-
-```sh
-POST /api/bookings
-Content-Type: application/json
-
-{
-  "hotel_id": "hotel-1",
-  "guest_name": "John Doe",
-  "guest_email": "john.doe@example.com",
-  "checkin": "2024-12-20",
-  "checkout": "2024-12-23",
-  "guests": 2,
-  "total_price": 450.00
-}
-```
-
-Creates a new booking with status `pending`.
-
 #### Approve Booking
 
 ```sh
 POST /api/bookings/{id}/approve
 ```
 
-Approves a pending booking. The service evaluates Flipt feature flags to determine:
+Approves a pending booking. The service:
 
-- Whether to auto-approve based on the `auto-approval` flag
-- The approval tier (standard/premium/vip) based on the `approval-tier` flag
+1. Fetches the booking from hotel-service
+2. Evaluates Flipt feature flags to determine:
+   - Whether to auto-approve based on the `auto-approval` flag
+   - The approval tier (standard/premium/vip) based on the `approval-tier` flag
+3. Generates a confirmation number
+4. Updates the booking status to `confirmed` in hotel-service via PATCH
 
-Response includes the booking details, auto-approval status, and approval tier.
+Response includes the booking details, auto-approval status, approval tier, and confirmation number.
 
 #### Reject Booking
 
@@ -75,7 +60,7 @@ Content-Type: application/json
 }
 ```
 
-Rejects a pending booking with a reason.
+Rejects a pending booking with a reason. Updates the booking status to `rejected` in hotel-service via PATCH.
 
 ### Feature Flag Status
 
@@ -102,6 +87,7 @@ Environment variables:
 - `FLIPT_URL`: Flipt server URL (default: `http://flipt:8080`)
 - `FLIPT_NAMESPACE`: Flipt namespace (default: `default`)
 - `FLIPT_ENVIRONMENT`: Flipt environment (default: `onoffinc`)
+- `HOTEL_SERVICE_URL`: Hotel service URL (default: `http://hotel-service:8000`)
 - `PORT`: Service port (default: `8001`)
 
 ## Example Usage
@@ -197,6 +183,10 @@ flags:
          ├──────► Flipt (Streaming)
          │        - auto-approval flag
          │        - approval-tier flag
+         │
+         ├──────► Hotel Service (REST)
+         │        - GET /api/bookings/{id}
+         │        - PATCH /api/bookings/{id}
          │
          ├──────► Jaeger (Traces)
          │

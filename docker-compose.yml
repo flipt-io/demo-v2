@@ -8,7 +8,10 @@ services:
     ports:
       - "3000:3000"
     networks:
-      - flipt_network
+      flipt_network:
+        aliases:
+          - gitea.docker.localhost
+
     environment:
       ROOT_URL: http://gitea.docker.localhost:3000/
       DOMAIN: gitea.docker.localhost
