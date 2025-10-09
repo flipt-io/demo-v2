@@ -1,14 +1,14 @@
 # Flipt v2 Demo - TravelCo
 
-A comprehensive demonstration of Flipt v2 feature management platform showcasing a travel booking application with frontend (React), backend (Python), and admin services (Go) using feature flags with both client-side and server-side SDK patterns.
+A comprehensive demonstration of Flipt v2 feature management platform showcasing a travel booking application with webapp (React), hotel (Python) and admin services (Go) using feature flags with both client-side and server-side SDK patterns.
 
-> **⚠️ Demo Project Disclaimer**
+> [!WARNING] Demo Project Disclaimer
 >
-> This is a demonstration project designed to showcase Flipt's feature flag capabilities and integration patterns. It is **not intended for production use** and does not follow all production best practices (e.g., authentication, data persistence, error handling, security measures, etc.). The goal is to demonstrate various ways to integrate and use Flipt across different programming languages and architectures.
+> This is a demonstration project designed to showcase Flipt's feature flag capabilities and integration patterns. It is **not intended for production use** and does not follow production best practices (e.g., authentication, data persistence, error handling, security measures, etc.). The goal is to demonstrate various ways to integrate and use Flipt across different programming languages and architectures.
 
 ## Overview
 
-This demo represents **TravelCo**, a fictional travel company's booking platform that uses Flipt feature flags to control various aspects of the user experience and backend functionality.
+This demo represents **TravelCo**, a fictional travel company's booking platform that uses Flipt feature flags to control various aspects of the user experience and service functionality.
 
 **SDK Architecture:**
 
@@ -20,13 +20,12 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                         Browser                          │
-│              http://localhost:4000                       │
 │         Webapp (Client-Side SDK - React)                 │
 └────────────────────────┬─────────────────────────────────┘
                          │
                          ▼
 ┌──────────────────────────────────────────────────────────┐
-│                    Nginx (Port 80)                       │
+│                    Nginx (Port 4000)                     │
 │  - Serves webapp static files                            │
 │  - Proxies /api/* → hotel-service:8000                   │
 │  - Proxies /internal/v1/* → flipt:8080                   │
@@ -68,10 +67,10 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
 
 ## Services
 
-### 1. Webapp (React + TypeScript)
+### 1. Webapp (React)
 
 - **Port**: 4000
-- **Technology**: React 19, Vite, TailwindCSS
+- **Technology**: React 19, Vite, TypeScript
 - **Flipt Client**: `@flipt-io/flipt-client-react` (client-side SDK)
 - **SDK Type**: Client-side - Evaluates flags in the browser for instant UI updates without reloads
 - **Feature Flags**:
@@ -83,7 +82,7 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
   - Real-time booking status with confirmation numbers
 - **Telemetry**: OpenTelemetry metrics exported to Prometheus
 
-### 2. Hotel Service (Python + FastAPI)
+### 2. Hotel Service (Python)
 
 - **Port**: 8000
 - **Technology**: Python 3.12, FastAPI, Uvicorn
@@ -102,10 +101,10 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
 - **Performance Optimization**: Uses Flipt batch evaluation API to evaluate `real-time-availability` and `loyalty-program` flags in a single request, reducing network overhead
 - **Telemetry**: Full OpenTelemetry integration (traces + metrics)
 
-### 3. Admin Service (Go + Standard HTTP)
+### 3. Admin Service (Go)
 
 - **Port**: 8001
-- **Technology**: Go 1.25, Standard HTTP library
+- **Technology**: Go 1.25
 - **Flipt Client**: `flipt-client-go` (client-side SDK with streaming support)
 - **SDK Type**: Client-side - Fetches and caches flag state locally, with streaming updates for near real-time flag changes
 - **API Documentation**: OpenAPI/Swagger UI at root endpoint (`/`)
