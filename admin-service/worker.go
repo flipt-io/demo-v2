@@ -30,7 +30,7 @@ func (w *AutoApprovalWorker) Start(ctx context.Context) {
 			log.Println("Auto-approval worker stopped")
 			return
 		case <-ticker.C:
-			if w.svc.AutoApprovalEnabled(ctx) {
+			if w.svc.autoApprovalEnabled(ctx) {
 				log.Println("Auto-approval worker check - enabled")
 				w.processBookings(ctx)
 			}

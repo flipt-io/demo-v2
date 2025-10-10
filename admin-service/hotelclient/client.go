@@ -156,8 +156,8 @@ func (c *Client) UpdateBooking(ctx context.Context, bookingID string, update Boo
 	return nil
 }
 
-// GetHotelAvialibility checks hotel availability for given dates and guests
-func (c *Client) GetHotelAvialibility(ctx context.Context, hotelID, checkin, checkout string, guests int) (*HotelInfo, error) {
+// GetHotelAvailability checks hotel availability for given dates and guests
+func (c *Client) GetHotelAvailability(ctx context.Context, hotelID, checkin, checkout string, guests int) (*HotelInfo, error) {
 	url := fmt.Sprintf("%s/api/hotels/%s/availability?guests=%d&checkin=%s&checkout=%s", c.baseURL, hotelID, guests, checkin, checkout)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)

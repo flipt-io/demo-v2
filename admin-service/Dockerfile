@@ -12,6 +12,7 @@ RUN go mod download
 # Copy source code
 COPY *.go ./
 COPY hotelclient ./hotelclient
+COPY api ./api
 COPY openapi.json ./
 
 # Build the application

@@ -358,14 +358,6 @@
           "guests": {
             "type": "integer",
             "example": 2
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
           }
         }
       },

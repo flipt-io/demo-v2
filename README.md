@@ -163,6 +163,12 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
 - Docker & Docker Compose
 - Make (optional)
 
+> [!NOTE]
+> This project expects `gitea.docker.localhost` to resolve to `127.0.0.1`. Add the following to your `/etc/hosts` file if needed:
+> ```
+> 127.0.0.1 gitea.docker.localhost
+> ```
+
 ### Start the Demo
 
 ```sh
@@ -250,18 +256,6 @@ Once started, you can access:
 5. Compare this to individual evaluations - batch evaluation reduces network overhead
 6. In Flipt UI, toggle both flags on/off
 7. Search hotels again and observe in Jaeger how both flags are evaluated together efficiently
-
-### Scenario 7: Admin Booking Approval Workflow
-
-1. Book a hotel via webapp at <http://localhost:4000> (without instant-booking enabled)
-2. Open Admin Service at <http://localhost:8001/api/bookings?status=pending>
-3. View pending bookings from the hotel service
-4. Go to Flipt UI and configure `auto-approval` and `approval-tier` flags
-5. Set approval rules based on booking value (e.g., auto-approve under $500)
-6. Approve a booking via `POST /api/bookings/{id}/approve`
-7. Booking status is updated to "confirmed" with a confirmation number
-8. View traces in Jaeger showing flag evaluation, approval flow, and PATCH update
-9. Check the booking status via hotel service: `GET /api/bookings/{id}`
 
 ### Scenario 7: Admin Booking Approval Workflow
 
