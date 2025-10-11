@@ -376,7 +376,7 @@ This demo showcases:
 4. **Segmentation**: Context-based targeting (seasonal, user tier, booking value)
 5. **Git-based Storage**: Feature flags as code with version control
 6. **Full Observability**: Traces, metrics, and analytics integration
-7. **Streaming Updates**: Go client with real-time flag synchronization (5-second polling)
+7. **Streaming Updates**: Go client with real-time flag synchronization
 8. **Performance Optimization**: Batch evaluation API to reduce network overhead (Python service evaluates multiple boolean flags in a single request)
 9. **Real-world Use Cases**:
    - A/B testing (price strategies)
