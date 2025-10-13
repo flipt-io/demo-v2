@@ -11,7 +11,6 @@ services:
       flipt_network:
         aliases:
           - gitea.docker.localhost
-
     environment:
       ROOT_URL: http://gitea.docker.localhost:3000/
       DOMAIN: gitea.docker.localhost
@@ -26,6 +25,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  gitea-runner:
+    container_name: gitea_act_runner
+    image: gitea/act_runner:latest-dind-rootless
+    privileged: true
+    restart: always
+    networks:
+      - flipt_network
+    depends_on:
+      gitea:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - GITEA_INSTANCE_URL=http://gitea:3000
+      - GITEA_RUNNER_NAME=3ad321497a7e
+      - DOCKER_HOST=unix:///var/run/user/1000/docker.sock
+      - GITEA_RUNNER_REGISTRATION_TOKEN=riyUbrkLdKNKXAw1yjZTpr3JKT35IAzuw8nc0w4C
 
   prometheus:
     container_name: prometheus

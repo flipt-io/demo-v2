@@ -18,8 +18,9 @@ RUN git clone /data/git/repositories/onoffinc/features.git . && \
   git config --global user.name 'admin'
 
 COPY features.yaml default/features.yaml
+COPY workflows/lint.yaml .gitea/workflows/lint.yaml
 
-RUN git add default/features.yaml && \
+RUN git add default/features.yaml .gitea && \
   git commit -m "Initial commit" && \
   git push origin main && \
   cd / && rm -rf /tmp/repo
