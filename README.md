@@ -133,20 +133,38 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
   - Environment: `onoffinc`
   - Namespace: `default`
 
-### 5. Gitea (Git Server)
+### 5. Gitea (Git Server & CI/CD)
 
 - **Port**: 3000
-- **Purpose**: Git-based storage for feature flags
+- **Purpose**: Git-based storage for feature flags and CI/CD automation
 - **Credentials**: `admin:password`
 - **Repository**: `onoffinc/features`
+- **Features**:
+  - Git-based feature flag version control
+  - Gitea Actions for automated testing and validation
+  - Pull request workflows for flag configuration validation
 
-### 6. Jaeger (Distributed Tracing)
+### 6. Gitea Actions Runner
+
+- **Container**: `gitea_act_runner`
+- **Purpose**: Execute CI/CD workflows for automated testing
+- **Features**:
+  - Docker-in-Docker (DinD) support for building and testing
+  - Automatic registration with Gitea instance
+  - On-demand workflow execution for pull requests
+- **Workflow**: `.gitea/workflows/lint.yaml`
+  - Triggered on pull request events
+  - Downloads and installs Flipt CLI
+  - Validates feature flag configuration with `flipt validate`
+  - Ensures flag definitions are correct before merging
+
+### 7. Jaeger (Distributed Tracing)
 
 - **Port**: 16686
 - **Purpose**: Collect and visualize traces from all services
 - **Protocol**: OTLP over HTTP
 
-### 7. Prometheus (Metrics & Analytics)
+### 8. Prometheus (Metrics & Analytics)
 
 - **Port**: 9090
 - **Purpose**: Store metrics and analytics data
@@ -165,6 +183,7 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
 
 > [!NOTE]
 > This project expects `gitea.docker.localhost` to resolve to `127.0.0.1`. Add the following to your `/etc/hosts` file if needed:
+>
 > ```
 > 127.0.0.1 gitea.docker.localhost
 > ```
@@ -280,6 +299,26 @@ Once started, you can access:
 7. Monitor in Prometheus: `admin_booking_approvals_total` by tier
 8. Review traces in Jaeger to see how context affects tier evaluation
 
+### Scenario 9: Automated Flag Validation with Gitea Actions
+
+1. Go to Gitea at <http://localhost:3000> and log in (`admin:password`)
+2. Navigate to `onoffinc/features` repository
+3. Click on `features.yaml` and edit it
+4. Make a change to the flag configuration (try introducing a syntax error) and save into a new branch
+5. Create a pull request from your branch
+6. Watch the Gitea Actions runner automatically trigger
+7. Navigate to the Actions tab to see the workflow running
+8. The workflow will:
+   - Check out the code
+   - Download and install Flipt CLI (v2.2.0)
+   - Run `flipt validate` to check flag configuration
+9. If validation fails, the PR will show a failed check
+10. Fix the configuration and push again to re-trigger validation
+11. Once validation passes, the PR can be safely merged
+12. This ensures only valid flag configurations reach production
+
+This demonstrates how to use CI/CD to maintain flag configuration quality and prevent misconfigurations from breaking your feature flag infrastructure.
+
 ## Feature Flags Configuration
 
 All feature flags are defined in `gitea/features.yaml`:
@@ -378,15 +417,18 @@ This demo showcases:
 6. **Full Observability**: Traces, metrics, and analytics integration
 7. **Streaming Updates**: Go client with real-time flag synchronization
 8. **Performance Optimization**: Batch evaluation API to reduce network overhead (Python service evaluates multiple boolean flags in a single request)
-9. **Real-world Use Cases**:
-   - A/B testing (price strategies)
-   - Progressive rollouts (instant booking)
-   - Seasonal targeting (themes)
-   - Premium features (loyalty program)
-   - Intelligent approval routing (admin service)
-   - Multi-tier workflows (approval tiers)
-   - Efficient flag evaluation patterns (batch API)
-   - Different SDK patterns for different architectural needs
+9. **CI/CD Integration**: Automated flag validation with Gitea Actions to prevent configuration errors
+10. **Real-world Use Cases**:
+
+- A/B testing (price strategies)
+- Progressive rollouts (instant booking)
+- Seasonal targeting (themes)
+- Premium features (loyalty program)
+- Intelligent approval routing (admin service)
+- Multi-tier workflows (approval tiers)
+- Efficient flag evaluation patterns (batch API)
+- Different SDK patterns for different architectural needs
+- Automated quality gates for flag configurations
 
 ## License
 

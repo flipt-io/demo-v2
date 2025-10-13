@@ -44,12 +44,12 @@ environments:
     storage: "onoffinc"
     scm:
       type: gitea
-      api_url: http://gitea:3000/
+      api_url: http://gitea.docker.localhost:3000/
       credentials: gitea
 
 storage:
   onoffinc:
-    remote: "http://gitea:3000/onoffinc/features.git"
+    remote: "http://gitea.docker.localhost:3000/onoffinc/features.git"
     branch: "main"
     poll_interval: "30s"
     credentials: gitea
