@@ -87,6 +87,7 @@ services:
         condition: service_healthy
     ports:
       - "8080:8080"
+      - "9000:9000"
     networks:
       - flipt_network
     restart: always
@@ -118,7 +119,7 @@ services:
     restart: unless-stopped
     ports:
       - "16686:16686"
-      - 4318
+      - "4318:4318"
     networks:
       - flipt_network
 
@@ -177,7 +178,7 @@ services:
         condition: service_started
     environment:
       - FLIPT_URL=http://flipt:8080
-      - FLIPT_NAMESPACE=default
+      - FLIPT_NAMESPACE=admin
       - FLIPT_ENVIRONMENT=onoffinc
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://prometheus:9090/api/v1/otlp/v1/metrics

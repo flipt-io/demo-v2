@@ -131,7 +131,7 @@ This demo represents **TravelCo**, a fictional travel company's booking platform
   - Analytics storage in Prometheus
   - Authentication via OIDC (Gitea)
   - Environment: `onoffinc`
-  - Namespace: `default`
+  - Namespaces: `default` (webapp & hotel service), `admin` (admin service)
 
 ### 5. Gitea (Git Server & CI/CD)
 
@@ -281,23 +281,25 @@ Once started, you can access:
 1. Book a hotel via webapp at <http://localhost:4000> (without instant-booking enabled)
 2. Open Admin Service at <http://localhost:8001/api/bookings?status=pending>
 3. View pending bookings from the hotel service
-4. Go to Flipt UI and configure `auto-approval` and `approval-tier` flags
-5. Set approval rules based on booking value (e.g., auto-approve under $500)
-6. Approve a booking via `POST /api/bookings/{id}/approve`
-7. Booking status is updated to "confirmed" with a confirmation number
-8. View traces in Jaeger showing flag evaluation, approval flow, and PATCH update
-9. Check the booking status via hotel service: `GET /api/bookings/{id}`
+4. Go to Flipt UI and switch to the `admin` namespace using the namespace dropdown in the top navigation
+5. Configure `auto-approval` and `approval-tier` flags in the admin namespace
+6. Set approval rules based on booking value (e.g., auto-approve under $500)
+7. Approve a booking via `POST /api/bookings/{id}/approve`
+8. Booking status is updated to "confirmed" with a confirmation number
+9. View traces in Jaeger showing flag evaluation, approval flow, and PATCH update
+10. Check the booking status via hotel service: `GET /api/bookings/{id}`
 
 ### Scenario 8: Multi-tier Approval Strategy
 
-1. In Flipt UI, configure `approval-tier` variant rules
-2. Set segments: high-value bookings (>$1000) → VIP tier
-3. Set segments: premium hotels → Premium tier
-4. Default bookings → Standard tier
-5. Create bookings with different price points and hotels
-6. Approve bookings via admin service to see tier assignment
-7. Monitor in Prometheus: `admin_booking_approvals_total` by tier
-8. Review traces in Jaeger to see how context affects tier evaluation
+1. Go to Flipt UI and switch to the `admin` namespace using the namespace dropdown in the top navigation
+2. Configure `approval-tier` variant rules in the admin namespace
+3. Set segments: high-value bookings (>$1000) → VIP tier
+4. Set segments: premium hotels → Premium tier
+5. Default bookings → Standard tier
+6. Create bookings with different price points and hotels
+7. Approve bookings via admin service to see tier assignment
+8. Monitor in Prometheus: `admin_booking_approvals_total` by tier
+9. Review traces in Jaeger to see how context affects tier evaluation
 
 ### Scenario 9: Automated Flag Validation with Gitea Actions
 
@@ -321,27 +323,43 @@ This demonstrates how to use CI/CD to maintain flag configuration quality and pr
 
 ## Feature Flags Configuration
 
-All feature flags are defined in `gitea/features.yaml`:
+Feature flags are organized by namespace:
 
-### Boolean Flags
+- **Default Namespace** (`gitea/default-features.yaml`): Webapp and hotel service flags
+- **Admin Namespace** (`gitea/admin-features.yaml`): Admin service flags
 
-- `sale`: Seasonal sale banner
-- `real-time-availability`: Live room availability updates
-- `loyalty-program`: Loyalty member discounts
-- `instant-booking`: Instant confirmation flow
-- `auto-approval`: Automatic booking approval for low-risk bookings
+### Default Namespace (`default`)
 
-### Variant Flags
+**Boolean Flags:**
 
-- `theme`: Seasonal hero backgrounds (city, beach, mountain, snowboard)
-- `price-display-strategy`: Price presentation (per-night, total, with-fees, dynamic)
-- `approval-tier`: Multi-level approval (standard, premium, vip)
+- `sale`: Seasonal sale banner (webapp)
+- `real-time-availability`: Live room availability updates (hotel service)
+- `loyalty-program`: Loyalty member discounts (hotel service)
+- `instant-booking`: Instant confirmation flow (hotel service)
 
-### Segments
+**Variant Flags:**
+
+- `theme`: Seasonal hero backgrounds - city, beach, mountain, snowboard (webapp)
+- `price-display-strategy`: Price presentation - per-night, total, with-fees, dynamic (hotel service)
+
+**Segments:**
 
 - `winter`, `spring`, `summer`, `fall`: Seasonal segments based on month
 - `premium-users`: Premium tier users
 - `budget-users`: Budget-conscious users
+
+### Admin Namespace (`admin`)
+
+**Boolean Flags:**
+
+- `auto-approval`: Automatic booking approval for low-risk bookings
+
+**Variant Flags:**
+
+- `approval-tier`: Multi-level approval - standard, premium, vip
+
+**Segments:**
+
 - `trusted-bookings`: Low-risk bookings (≤$500)
 - `high-value-bookings`: High-value bookings (≥$1000)
 - `premium-hotels`: Premium/luxury hotel bookings
