@@ -14,13 +14,15 @@ RUN mkdir -p /data/git/repositories/onoffinc && \
 WORKDIR /tmp/repo
 RUN git clone /data/git/repositories/onoffinc/features.git . && \
   mkdir -p default && \
+  mkdir -p admin && \
   git config --global user.email 'admin@example.com' && \
   git config --global user.name 'admin'
 
-COPY features.yaml default/features.yaml
+COPY default-features.yaml default/features.yaml
+COPY admin-features.yaml admin/features.yaml
 COPY workflows/lint.yaml .gitea/workflows/lint.yaml
 
-RUN git add default/features.yaml .gitea && \
+RUN git add default admin .gitea && \
   git commit -m "Initial commit" && \
   git push origin main && \
   cd / && rm -rf /tmp/repo

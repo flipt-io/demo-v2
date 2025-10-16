@@ -70,39 +70,6 @@ flags:
       type: BOOLEAN_FLAG_TYPE
       description: '#hotel-service Enable instant booking confirmation vs pending approval'
       enabled: false
-    - key: auto-approval
-      name: Auto Approval
-      type: BOOLEAN_FLAG_TYPE
-      description: '#admin-service Automatically approve bookings that meet criteria (low price, trusted users)'
-      enabled: false
-    - key: approval-tier
-      name: Approval Tier
-      type: VARIANT_FLAG_TYPE
-      description: '#admin-service Multi-level approval workflow based on booking value and hotel category'
-      enabled: true
-      variants:
-        - default: true
-          key: standard
-          name: Standard Approval
-        - key: premium
-          name: Premium Approval
-        - key: vip
-          name: VIP Approval
-      rules:
-        - segment:
-            keys:
-                - high-value-bookings
-            operator: OR_SEGMENT_OPERATOR
-          distributions:
-            - variant: vip
-              rollout: 100
-        - segment:
-            keys:
-                - premium-hotels
-            operator: OR_SEGMENT_OPERATOR
-          distributions:
-            - variant: premium
-              rollout: 100
     - key: price-display-strategy
       name: Price Display Strategy
       type: VARIANT_FLAG_TYPE
@@ -199,34 +166,3 @@ segments:
           operator: eq
           value: budget
       match_type: ALL_MATCH_TYPE
-    - key: trusted-bookings
-      name: Trusted Bookings
-      description: '#admin-service Low-risk bookings from trusted users with low prices'
-      constraints:
-        - type: NUMBER_COMPARISON_TYPE
-          property: total_price
-          operator: lte
-          value: "500"
-      match_type: ALL_MATCH_TYPE
-    - key: high-value-bookings
-      name: High Value Bookings
-      description: '#admin-service High-value bookings requiring VIP approval'
-      constraints:
-        - type: NUMBER_COMPARISON_TYPE
-          property: total_price
-          operator: gte
-          value: "1000"
-      match_type: ALL_MATCH_TYPE
-    - key: premium-hotels
-      name: Premium Hotels
-      description: '#admin-service Premium or luxury hotel bookings requiring premium approval'
-      constraints:
-        - type: STRING_COMPARISON_TYPE
-          property: hotel_category
-          operator: eq
-          value: premium
-        - type: STRING_COMPARISON_TYPE
-          property: hotel_category
-          operator: eq
-          value: luxury
-      match_type: ANY_MATCH_TYPE

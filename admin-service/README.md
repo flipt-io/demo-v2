@@ -85,10 +85,12 @@ Returns service health status.
 Environment variables:
 
 - `FLIPT_URL`: Flipt server URL (default: `http://flipt:8080`)
-- `FLIPT_NAMESPACE`: Flipt namespace (default: `default`)
+- `FLIPT_NAMESPACE`: Flipt namespace (default: `admin`)
 - `FLIPT_ENVIRONMENT`: Flipt environment (default: `onoffinc`)
 - `HOTEL_SERVICE_URL`: Hotel service URL (default: `http://hotel-service:8000`)
 - `PORT`: Service port (default: `8001`)
+
+**Note:** The admin service uses the `admin` namespace in Flipt, separate from the `default` namespace used by webapp and hotel service. This allows for isolated feature flag management for admin-specific functionality.
 
 ## Example Usage
 
@@ -136,13 +138,16 @@ Trace spans include:
 
 ## Feature Flag Configuration
 
-Add these flags to your Flipt configuration:
+Admin feature flags are defined in the `admin` namespace (see `gitea/admin-features.yaml`):
 
 ### Boolean Flag: `auto-approval`
 
 Controls automatic approval of bookings based on criteria.
 
 ```yaml
+namespace:
+  key: admin
+  name: Admin
 flags:
   - key: auto-approval
     name: Auto Approval
@@ -170,6 +175,14 @@ flags:
       - key: vip
         name: VIP Approval
 ```
+
+### Segments
+
+The admin namespace includes segments for targeting specific booking types:
+
+- `trusted-bookings`: Low-risk bookings (total_price ≤ $500)
+- `high-value-bookings`: High-value bookings (total_price ≥ $1000)
+- `premium-hotels`: Premium or luxury hotel category bookings
 
 ## Architecture
 
