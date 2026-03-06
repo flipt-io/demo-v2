@@ -18,6 +18,15 @@ authentication:
     csrf:
       key: "enabled"
   methods:
+    token:
+      enabled: true
+      storage:
+        tokens:
+          demo_token:
+            credential: super_token_secret
+            metadata:
+              label: admin
+
     oidc:
       enabled: true
       providers:
@@ -29,6 +38,13 @@ authentication:
           scopes:
             - email
             - profile
+authorization:
+  required: true
+  backend: local
+  local:
+    policy:
+      poll_interval: 5m
+      path: "/etc/flipt/config/policy.rego"
 
 credentials:
   gitea:

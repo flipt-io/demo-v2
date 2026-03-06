@@ -80,6 +80,7 @@ services:
     container_name: flipt
     volumes:
       - "./flipt/config.yml:/etc/flipt/config/default.yml"
+      - "./flipt/policy.rego:/etc/flipt/config/policy.rego"
     depends_on:
       prometheus:
         condition: service_healthy
