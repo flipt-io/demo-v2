@@ -53,7 +53,7 @@ services:
     volumes:
       - "./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml"
       - "./prometheus/web-config.yml:/etc/prometheus/web-config.yml"
-      - "./prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml"
+      - "./prometheus/rules:/etc/prometheus/rules"
       - "./prometheus/http.config.yml:/etc/prometheus/http.config.yml"
     ports:
       - "9090:9090"
@@ -76,8 +76,7 @@ services:
       start_period: 10s
 
   flipt:
-    image: docker.flipt.io/flipt/flipt:v2
-    container_name: flipt
+    image: docker.flipt.io/flipt/flipt:v2-nightly
     volumes:
       - "./flipt/config.yml:/etc/flipt/config/default.yml"
       - "./flipt/policy.rego:/etc/flipt/config/policy.rego"
@@ -86,22 +85,26 @@ services:
         condition: service_healthy
       gitea:
         condition: service_healthy
-    ports:
-      - "8080:8080"
-      - "9000:9000"
     networks:
       - flipt_network
     restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: 0.5
+          memory: 256M
     environment:
-      - FLIPT_LOG_LEVEL=info
+      - FLIPT_LOG_LEVEL=warn
       - FLIPT_ANALYTICS_STORAGE_PROMETHEUS_ENABLED=true
       - FLIPT_ANALYTICS_STORAGE_PROMETHEUS_URL=http://prometheus:9090
       - PROMETHEUS_AUTH_TOKEN=Basic YWRtaW46cGFzc3dvcmQ=
       - FLIPT_META_TELEMETRY_ENABLED=false
       - FLIPT_META_CHECK_FOR_UPDATES=false
+      - FLIPT_TRACING_ENABLED=true
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
-      # - FLIPT_LICENSE_KEY=XXXXX-XXXXX-XXXXXX-XXXXXX-XXXXXXXX-XX
-
+      - GOMEMLIMIT=200MiB
+      - GOGC=100
     command: ["/flipt", "server"]
     healthcheck:
       test: ["CMD", "wget", "--spider", "-qO-", "http://localhost:8080/health"]
@@ -110,8 +113,22 @@ services:
       retries: 10
       start_period: 5s
 
+  haproxy:
+    image: haproxy:3.3-alpine
+    container_name: haproxy
+    ports:
+      - "8080:8080"
+    networks:
+      - flipt_network
+    volumes:
+      - "./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro"
+    depends_on:
+      flipt:
+        condition: service_healthy
+    restart: always
+
   jaeger:
-    image: jaegertracing/jaeger:2.10.0
+    image: jaegertracing/jaeger:2.17.0
     container_name: jaeger
     deploy:
       resources:
@@ -136,6 +153,8 @@ services:
     depends_on:
       hotel-service:
         condition: service_started
+      flipt:
+        condition: service_healthy
 
   hotel-service:
     container_name: hotel-service
@@ -148,7 +167,7 @@ services:
       - flipt_network
     depends_on:
       flipt:
-        condition: service_healthy
+        condition: service_started
       jaeger:
         condition: service_started
     environment:
@@ -172,7 +191,7 @@ services:
       - flipt_network
     depends_on:
       flipt:
-        condition: service_healthy
+        condition: service_started
       jaeger:
         condition: service_started
       hotel-service:
@@ -181,12 +200,54 @@ services:
       - FLIPT_URL=http://flipt:8080
       - FLIPT_NAMESPACE=admin
       - FLIPT_ENVIRONMENT=onoffinc
+      - FLIPT_TOKEN=super_token_secret
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
       - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://prometheus:9090/api/v1/otlp/v1/metrics
       - OTEL_EXPORTER_OTLP_METRICS_HEADERS=Authorization=Basic YWRtaW46cGFzc3dvcmQ=
       - OTEL_SERVICE_NAME=admin-service
       - PORT=8001
       - HOTEL_SERVICE_URL=http://hotel-service:8000
+
+  chaosmonkey:
+    build:
+      context: chaosmonkey
+      dockerfile: Dockerfile
+    networks:
+      - flipt_network
+    depends_on:
+      flipt:
+        condition: service_started
+    environment:
+      - FLIPT_URL=http://flipt:8080
+      - OFREP_URL=http://flipt:8080
+      - NUM_SERVER_WORKERS=7
+      - NUM_CLIENT_WORKERS=3
+      - FLIPT_NAMESPACE=default
+      - FLIPT_TOKEN=chaosmonkey_secret
+      - FLIPT_ENVIRONMENT=onoffinc
+
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+    profiles: [chaos]
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    restart: always
+    ports:
+      - "3001:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    volumes:
+      - ./grafana/dashboards/:/etc/grafana/provisioning/dashboards/
+      - ./grafana/datasources/:/etc/grafana/provisioning/datasources/
+    networks:
+      - flipt_network
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=password
+    profiles: [chaos]
 
 networks:
   flipt_network:
