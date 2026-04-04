@@ -1,0 +1,107 @@
+# observability/prometheus/rules/grpc_sli_rules.yml
+groups:
+  - name: grpc_sli_recording
+    interval: 30s
+    rules:
+      # ------------------------------------------------------------------ #
+      # Availability SLI                                                     #
+      # Ratio of requests that did NOT result in a server-side failure.      #
+      # Excludes Internal + Unavailable as infrastructure errors.            #
+      # Result: 0–1  (e.g. 0.998 = 99.8% available)                         #
+      # ------------------------------------------------------------------ #
+      - record: grpc:service:availability:rate5m
+        expr: |
+          sum(rate(grpc_server_handled_total{grpc_code!~"Internal|Unavailable"}[5m])) by (grpc_service)
+          /
+          sum(rate(grpc_server_handled_total[5m])) by (grpc_service)
+
+      # ------------------------------------------------------------------ #
+      # Latency P99                                                          #
+      # 99th-percentile request duration in seconds, per service.           #
+      # ------------------------------------------------------------------ #
+      - record: grpc:service:latency_p99:rate5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(grpc_server_handling_seconds_bucket[5m])) by (grpc_service, le)
+          )
+
+      # ------------------------------------------------------------------ #
+      # Latency SLI                                                          #
+      # Fraction of requests completed within the 100 ms threshold.         #
+      # Change le="0.1" to match your actual SLO target.                    #
+      # Result: 0–1                                                          #
+      # ------------------------------------------------------------------ #
+      - record: grpc:service:latency_sli:rate5m
+        expr: |
+          sum(rate(grpc_server_handling_seconds_bucket{le="0.1"}[5m])) by (grpc_service)
+          /
+          sum(rate(grpc_server_handling_seconds_count[5m])) by (grpc_service)
+
+      # ------------------------------------------------------------------ #
+      # Error rate by method                                                 #
+      # Fraction of calls that returned any non-OK status, per method.      #
+      # Result: 0–1                                                          #
+      # ------------------------------------------------------------------ #
+      - record: grpc:method:error_rate:rate5m
+        expr: |
+          sum(rate(grpc_server_handled_total{grpc_code!="OK"}[5m])) by (grpc_service, grpc_method)
+          /
+          sum(rate(grpc_server_handled_total[5m])) by (grpc_service, grpc_method)
+
+      # ------------------------------------------------------------------ #
+      # Request rate                                                         #
+      # Throughput in requests/second per service.                          #
+      # ------------------------------------------------------------------ #
+      - record: grpc:service:request_rate:rate5m
+        expr: |
+          sum(rate(grpc_server_handled_total[5m])) by (grpc_service)
+
+      # ------------------------------------------------------------------ #
+      # Error budget remaining  (30-day rolling window, 99.9 % SLO)        #
+      # 1.0 = full budget  |  0.0 = exhausted  |  negative = SLO broken    #
+      # Depends on grpc:service:availability:rate5m being recorded above.   #
+      # ------------------------------------------------------------------ #
+      - record: grpc:service:error_budget_remaining:rate30d
+        expr: |
+          1 - (
+            (1 - avg_over_time(grpc:service:availability:rate5m[30d]))
+            /
+            (1 - 0.999)
+          )
+
+  # ------------------------------------------------------------------ #
+  # Alerting rules (same group interval as recording rules)             #
+  # ------------------------------------------------------------------ #
+  - name: grpc_sli_alerts
+    rules:
+      - alert: GrpcServiceAvailabilityLow
+        expr: grpc:service:availability:rate5m < 0.999
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "gRPC service {{ $labels.grpc_service }} below SLO"
+          description: >
+            Availability is {{ $value | humanizePercentage }} over the last 5 m
+            (SLO: 99.9 %). Error budget is burning.
+
+      - alert: GrpcErrorBudgetCritical
+        expr: grpc:service:error_budget_remaining:rate30d < 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.grpc_service }} has < 10 % error budget left"
+          description: >
+            Only {{ $value | humanizePercentage }} of the 30-day error budget
+            remains for {{ $labels.grpc_service }}.
+
+      - alert: GrpcLatencyHigh
+        expr: grpc:service:latency_p99:rate5m > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 latency high on {{ $labels.grpc_service }}"
+          description: >
+            P99 latency is {{ $value | humanizeDuration }} (threshold: 500 ms).

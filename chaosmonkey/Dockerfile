@@ -11,12 +11,9 @@ RUN go mod download
 
 # Copy source code
 COPY *.go ./
-COPY hotelclient ./hotelclient
-COPY api ./api
-COPY openapi.json ./
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s" -o admin-service .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s"
 
 # Runtime stage
 FROM alpine:latest
@@ -24,10 +21,7 @@ FROM alpine:latest
 WORKDIR /tmp
 
 # Copy the binary from builder
-COPY --from=builder /app/admin-service /bin/admin-service
-
-# Expose port
-EXPOSE 8001
+COPY --from=builder /app/chaosmonkey /bin/chaosmonkey
 
 # Run the application
-CMD ["/bin/admin-service"]
+CMD ["/bin/chaosmonkey"]

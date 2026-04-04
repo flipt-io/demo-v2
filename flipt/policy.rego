@@ -2,9 +2,7 @@ package flipt.authz.v2
 
 import rego.v1
 
-_restricted_envs := {"onoffinc"}
-
-_admin_namespaces := {"admin"}
+_restricted_envs := {"onoffinc", "default"}
 
 default allow := false
 

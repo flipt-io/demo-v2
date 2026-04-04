@@ -2,11 +2,24 @@ global:
   scrape_interval: 15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
   evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
   # scrape_timeout is set to the global default (10s).
+  scrape_native_histograms: true
 
 scrape_configs:
   - job_name: flipt-v2
+    dns_sd_configs:
+      - names:
+          - flipt
+        type: A
+        port: 8080
+  - job_name: haproxy
     static_configs:
-      - targets: ["flipt:8080"]
+      - targets: ["haproxy:8405"]
+  - job_name: chaosmonkey
+    dns_sd_configs:
+      - names:
+          - chaosmonkey
+        type: A
+        port: 9090
 
 rule_files:
-  - /etc/prometheus/alert.rules.yml
+  - /etc/prometheus/rules/*.yml
