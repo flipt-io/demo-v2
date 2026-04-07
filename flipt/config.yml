@@ -40,6 +40,7 @@ authentication:
           client_secret: gto_76jd2kuc3cuim5jxmk5egop2vfogofsu4a3xtkq3iq2vh7xtriwa
           redirect_address: "http://localhost:8080"
           use_pkce: true
+          fetch_extra_user_info: true
           scopes:
             - email
             - profile
