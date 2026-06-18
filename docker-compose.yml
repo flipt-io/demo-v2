@@ -1,55 +1,123 @@
 services:
-  gitea:
-    container_name: gitea
-    hostname: gitea.docker.localhost
-    build:
-      context: gitea
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    networks:
-      flipt_network:
-        aliases:
-          - gitea.docker.localhost
+  localstack:
+    image: localstack/localstack:3.8.0
     environment:
-      ROOT_URL: http://gitea.docker.localhost:3000/
-      DOMAIN: gitea.docker.localhost
-      DISABLE_REGISTRATION: "true"
-      REQUIRE_SIGNIN_VIEW: "true"
-      INSTALL_LOCK: "true"
-      DB_TYPE: sqlite3
-      SSH_DOMAIN: localhost
-      HTTP_PORT: "3000"
+      - SERVICES=s3
+      - DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    ports:
+      - "4566:4566"
+    networks:
+      - flipt_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 10s
+      test: ["CMD", "awslocal", "s3", "ls"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
-  gitea-runner:
-    container_name: gitea_act_runner
-    image: gitea/act_runner:latest-dind-rootless
-    privileged: true
-    restart: always
+  localstack-init:
+    image: localstack/localstack:3.8.0
+    entrypoint: >
+      sh -c "awslocal --endpoint-url=http://localstack:4566 s3 mb s3://git-repos"
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
     networks:
       - flipt_network
     depends_on:
-      gitea:
+      localstack:
         condition: service_healthy
-        restart: true
+
+  ogit:
+    image: ghcr.io/labbs/ogit:latest
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - GITEA_INSTANCE_URL=http://gitea:3000
-      - GITEA_RUNNER_NAME=3ad321497a7e
-      - DOCKER_HOST=unix:///var/run/user/1000/docker.sock
-      - GITEA_RUNNER_REGISTRATION_TOKEN=riyUbrkLdKNKXAw1yjZTpr3JKT35IAzuw8nc0w4C
+      - ./ogit/config.yaml:/config/config.yaml
+    ports:
+      - "8088:8080"
+    networks:
+      - flipt_network
+    depends_on:
+      localstack-init:
+        condition: service_completed_successfully
+
+  ogit-init:
+    image: alpine/git
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        apk add --no-cache curl
+        sleep 2
+        curl -sf -X POST http://ogit:8080/api/repo -H 'Content-Type: application/json' -d '{"name": "onoffinc-features"}' || true
+        git clone http://ogit:8080/onoffinc-features.git /tmp/repo
+        cd /tmp/repo
+        git config user.email 'init@local'
+        git config user.name 'init'
+        mkdir -p default
+        cp /ogit-init/default-features.yaml ./default/features.yaml
+        git add .
+        git commit -m 'initial commit'
+        git push origin main
+    volumes:
+      - ./ogit:/ogit-init:ro
+    networks:
+      - flipt_network
+    depends_on:
+      ogit:
+        condition: service_started
+
+#  gitea:
+#    container_name: gitea
+#    hostname: gitea.docker.localhost
+#    build:
+#      context: gitea
+#      dockerfile: Dockerfile
+#    ports:
+#      - "3000:3000"
+#    networks:
+#      flipt_network:
+#        aliases:
+#          - gitea.docker.localhost
+#    environment:
+#      ROOT_URL: http://gitea.docker.localhost:3000/
+#      DOMAIN: gitea.docker.localhost
+#      DISABLE_REGISTRATION: "true"
+#      REQUIRE_SIGNIN_VIEW: "true"
+#      INSTALL_LOCK: "true"
+#      DB_TYPE: sqlite3
+#      SSH_DOMAIN: localhost
+#      HTTP_PORT: "3000"
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+
+#  gitea-runner:
+#    container_name: gitea_act_runner
+#    image: gitea/act_runner:latest-dind-rootless
+#    privileged: true
+#    restart: always
+#    networks:
+#      - flipt_network
+#    depends_on:
+#      gitea:
+#        condition: service_healthy
+#        #restart: true
+#    volumes:
+#      - /var/run/docker.sock:/var/run/docker.sock
+#    environment:
+#      - GITEA_INSTANCE_URL=http://gitea:3000
+#      - GITEA_RUNNER_NAME=3ad321497a7e
+#      - DOCKER_HOST=unix:///var/run/user/1000/docker.sock
+#      - GITEA_RUNNER_REGISTRATION_TOKEN=riyUbrkLdKNKXAw1yjZTpr3JKT35IAzuw8nc0w4C
 
   prometheus:
     container_name: prometheus
     networks:
       - flipt_network
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.11.2
     volumes:
       - "./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml"
       - "./prometheus/web-config.yml:/etc/prometheus/web-config.yml"
@@ -83,8 +151,8 @@ services:
     depends_on:
       prometheus:
         condition: service_healthy
-      gitea:
-        condition: service_healthy
+      ogit-init:
+        condition: service_completed_successfully
     networks:
       - flipt_network
     restart: always
@@ -92,7 +160,7 @@ services:
       replicas: 2
       resources:
         limits:
-          cpus: 0.5
+          cpus: '0.5'
           memory: 256M
     environment:
       - FLIPT_LOG_LEVEL=warn
@@ -117,7 +185,7 @@ services:
     image: haproxy:3.3-alpine
     container_name: haproxy
     ports:
-      - "8080:8080"
+      - "8081:8080"
     networks:
       - flipt_network
     volumes:
@@ -225,7 +293,6 @@ services:
       - FLIPT_NAMESPACE=default
       - FLIPT_TOKEN=chaosmonkey_secret
       - FLIPT_ENVIRONMENT=onoffinc
-
     restart: unless-stopped
     deploy:
       replicas: 2
