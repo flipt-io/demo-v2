@@ -1,0 +1,19 @@
+http:
+  port: 8080
+  logs: true
+
+ssh:
+  enabled: false
+
+logger:
+  level: debug
+  pretty: true
+
+storage:
+  type: s3
+  s3:
+    bucket: git-repos
+    endpoint: http://localstack:4566
+    access-key: test
+    secret-key: test
+    region: us-east-1
