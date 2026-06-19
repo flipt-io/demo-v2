@@ -1,0 +1,168 @@
+version: "1.5"
+namespace:
+    key: default
+    name: Default
+flags:
+    - key: sale
+      name: Sale
+      type: BOOLEAN_FLAG_TYPE
+      description: '#webapp Highlight the banner promoting the seasonal sale'
+      enabled: false
+    - key: theme
+      name: Theme
+      type: VARIANT_FLAG_TYPE
+      description: '#webapp The hero background to the landing page'
+      enabled: true
+      variants:
+        - key: city
+          attachment:
+            - https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=1544
+        - key: beach
+          attachment:
+            - https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1544
+        - key: mountain
+          attachment:
+            - https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1544
+        - key: snowboard
+          attachment:
+            - https://images.unsplash.com/photo-1478700485868-972b69dc3fc4?q=80&w=1544
+      rules:
+        - segment:
+            keys:
+                - winter
+            operator: OR_SEGMENT_OPERATOR
+          distributions:
+            - variant: snowboard
+              rollout: 100
+        - segment:
+            keys:
+                - spring
+            operator: OR_SEGMENT_OPERATOR
+          distributions:
+            - variant: city
+              rollout: 100
+        - segment:
+            keys:
+                - summer
+            operator: OR_SEGMENT_OPERATOR
+          distributions:
+            - variant: beach
+              rollout: 100
+        - segment:
+            keys:
+                - fall
+            operator: OR_SEGMENT_OPERATOR
+          distributions:
+            - variant: mountain
+              rollout: 100
+    - key: real-time-availability
+      name: Real-Time Availability
+      type: BOOLEAN_FLAG_TYPE
+      description: '#hotel-service Enable real-time room availability updates in hotel search'
+      enabled: true
+    - key: loyalty-program
+      name: Loyalty Program
+      type: BOOLEAN_FLAG_TYPE
+      description: '#hotel-service Display loyalty program benefits and discounts (10% off for premium hotels)'
+      enabled: false
+    - key: instant-booking
+      name: Instant Booking
+      type: BOOLEAN_FLAG_TYPE
+      description: '#hotel-service Enable instant booking confirmation vs pending approval'
+      enabled: false
+    - key: price-display-strategy
+      name: Price Display Strategy
+      type: VARIANT_FLAG_TYPE
+      description: '#hotel-service Control how hotel prices are displayed to users for A/B testing'
+      enabled: true
+      variants:
+        - key: per-night
+          name: Per Night
+        - key: total
+          name: Total Price
+        - key: with-fees
+          name: With Fees
+        - key: dynamic
+          name: Dynamic Pricing
+      rules:
+        - segment:
+            keys:
+                - premium-users
+            operator: OR_SEGMENT_OPERATOR
+          distributions:
+            - variant: dynamic
+              rollout: 100
+        - segment:
+            keys:
+                - budget-users
+            operator: OR_SEGMENT_OPERATOR
+          distributions:
+            - variant: with-fees
+              rollout: 100
+segments:
+    - key: winter
+      name: Winter Season
+      description: '#webapp Targets users during winter months (January-March) for snowboard-themed content'
+      constraints:
+        - type: NUMBER_COMPARISON_TYPE
+          property: month
+          operator: gte
+          value: "1"
+        - type: NUMBER_COMPARISON_TYPE
+          property: month
+          operator: lte
+          value: "3"
+      match_type: ALL_MATCH_TYPE
+    - key: spring
+      name: Spring Season
+      description: '#webapp Targets users during spring months (April-May) for city-themed content'
+      constraints:
+        - type: NUMBER_COMPARISON_TYPE
+          property: month
+          operator: eq
+          value: "4"
+        - type: NUMBER_COMPARISON_TYPE
+          property: month
+          operator: eq
+          value: "5"
+      match_type: ANY_MATCH_TYPE
+    - key: summer
+      name: Summer Season
+      description: '#webapp Targets users during summer months (June-September) for beach-themed content'
+      constraints:
+        - type: NUMBER_COMPARISON_TYPE
+          property: month
+          operator: gte
+          value: "6"
+        - type: NUMBER_COMPARISON_TYPE
+          property: month
+          operator: lte
+          value: "9"
+      match_type: ALL_MATCH_TYPE
+    - key: fall
+      name: Fall Season
+      description: '#webapp Targets users during fall months (October) for mountain-themed content'
+      constraints:
+        - type: NUMBER_COMPARISON_TYPE
+          property: month
+          operator: eq
+          value: "10"
+      match_type: ALL_MATCH_TYPE
+    - key: premium-users
+      name: Premium Users
+      description: '#hotel-service Users with premium tier status who prefer dynamic pricing with potential savings'
+      constraints:
+        - type: STRING_COMPARISON_TYPE
+          property: user_tier
+          operator: eq
+          value: premium
+      match_type: ALL_MATCH_TYPE
+    - key: budget-users
+      name: Budget Users
+      description: '#hotel-service Users looking for budget options who prefer transparent pricing with all fees shown'
+      constraints:
+        - type: STRING_COMPARISON_TYPE
+          property: user_tier
+          operator: eq
+          value: budget
+      match_type: ALL_MATCH_TYPE

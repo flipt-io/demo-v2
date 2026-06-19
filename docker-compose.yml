@@ -17,23 +17,25 @@ services:
       retries: 10
 
   localstack-init:
-    image: localstack/localstack:3.8.0
-    entrypoint: >
-      sh -c "awslocal --endpoint-url=http://localstack:4566 s3 mb s3://git-repos"
-    environment:
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
-      - AWS_DEFAULT_REGION=us-east-1
+    build:
+      context: ./init
+      dockerfile: Dockerfile
+    entrypoint: ["/bin/sh", "/init/localstack-init.sh"]
     networks:
       - flipt_network
     depends_on:
       localstack:
         condition: service_healthy
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
 
   ogit:
     build:
       context: ./ogit-src
       dockerfile: Dockerfile
+    image: ogit:local-v1
     volumes:
       - ./ogit/config.yaml:/config/config.yaml
     ports:
@@ -45,29 +47,19 @@ services:
         condition: service_completed_successfully
 
   ogit-init:
-    image: alpine/git
-    entrypoint: [ "/bin/sh", "-c" ]
-    command:
-      - |
-        apk add --no-cache curl
-        sleep 2
-        curl -sf -X POST http://ogit:8080/api/repo -H 'Content-Type: application/json' -d '{"name": "onoffinc-features"}' || true
-        git clone http://ogit:8080/onoffinc-features.git /tmp/repo
-        cd /tmp/repo
-        git config user.email 'init@local'
-        git config user.name 'init'
-        mkdir -p default
-        cp /ogit-init/default-features.yaml ./default/features.yaml
-        git add .
-        git commit -m 'initial commit'
-        git push origin main
-    volumes:
-      - ./ogit:/ogit-init:ro
+    build:
+      context: ./init
+      dockerfile: Dockerfile
+    entrypoint: ["/bin/sh", "/init/ogit-init.sh"]
     networks:
       - flipt_network
     depends_on:
       ogit:
         condition: service_started
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
 
 #  gitea:
 #    container_name: gitea
