@@ -1,17 +1,12 @@
 services:
-  localstack:
-    image: localstack/localstack:3.8.0
-    environment:
-      - SERVICES=s3
-      - DEFAULT_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
+  floci:
+    image: floci/floci:latest
     ports:
       - "4566:4566"
     networks:
       - flipt_network
     healthcheck:
-      test: ["CMD", "awslocal", "s3", "ls"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/4566'"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -24,7 +19,7 @@ services:
     networks:
       - flipt_network
     depends_on:
-      localstack:
+      floci:
         condition: service_healthy
     environment:
       - AWS_ACCESS_KEY_ID=test
@@ -43,6 +38,8 @@ services:
     networks:
       - flipt_network
     depends_on:
+      floci:
+        condition: service_healthy
       localstack-init:
         condition: service_completed_successfully
 

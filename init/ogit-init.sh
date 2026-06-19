@@ -13,6 +13,10 @@ curl -sf -X POST http://ogit:8080/api/repo \
   -d '{"name": "onoffinc-features"}' || true
 
 echo "Cloning and pushing initial content..."
+if [ -d /tmp/repo ]; then
+  echo "Repo already cloned, skipping."
+  exit 0
+fi
 git clone http://ogit:8080/onoffinc-features.git /tmp/repo
 cd /tmp/repo
 git config user.email 'init@local'

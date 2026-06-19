@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-ENDPOINT=http://localstack:4566
+ENDPOINT=http://floci:4566
 BUCKET=git-repos
 
 echo "Checking if S3 bucket already exists..."

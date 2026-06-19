@@ -13,7 +13,7 @@ storage:
   type: s3
   s3:
     bucket: git-repos
-    endpoint: http://localstack:4566
+    endpoint: http://floci:4566
     access-key: test
     secret-key: test
     region: us-east-1
